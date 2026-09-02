@@ -28,8 +28,11 @@
 - Key Vault: `segpracticedevkv****` (Terraform adds a short suffix; name must be globally unique)
 - Postgres: Azure Database for PostgreSQL Flexible Server (`segpractice-pg-****`), database `segment`
 - Secrets in Key Vault: `postgres-admin-password`, `postgres-fqdn`, `postgres-connection-string`
+- API host: Linux App Service `segpractice-api-****` (plan in West Europe Free/F1 due to UK South quota)
+- Web host: Static Web Apps `segpractice-web-****`
 - Terraform state RG: `segment-practice-tfstate-rg` (bootstrap only; not app infra)
-- Region: `UK South`
+- Region: `UK South` (API plan / SWA use West Europe where required)
+
 
 ## Out of scope for v0
 Multi-destination routing, funnels/cohorts, streaming, prod env

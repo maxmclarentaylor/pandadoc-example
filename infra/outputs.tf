@@ -29,3 +29,24 @@ output "postgres_database_name" {
 output "postgres_admin_login" {
   value = var.postgres_admin_login
 }
+
+output "api_webapp_name" {
+  value = azurerm_linux_web_app.api.name
+}
+
+output "api_default_hostname" {
+  value = azurerm_linux_web_app.api.default_hostname
+}
+
+output "web_static_app_name" {
+  value = azurerm_static_web_app.web.name
+}
+
+output "web_default_hostname" {
+  value = azurerm_static_web_app.web.default_host_name
+}
+
+output "web_api_token" {
+  value     = azurerm_static_web_app.web.api_key
+  sensitive = true
+}
