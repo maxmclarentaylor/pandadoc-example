@@ -1,0 +1,27 @@
+# Terraform local files / caches
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+backend.hcl
+tfplan
+tfplan-*
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.env
+.pytest_cache/
+.mypy_cache/
+
+# Node / React
+node_modules/
+dist/
+.DS_Store

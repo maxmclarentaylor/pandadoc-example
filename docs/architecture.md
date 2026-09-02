@@ -25,7 +25,10 @@
 
 ## Azure naming (dev)
 - Resource group: `segment-practice-dev-rg`
-- Key Vault: `segmentpracticedevkv`
+- Key Vault: `segpracticedevkv****` (Terraform adds a short suffix; name must be globally unique)
+- Postgres: Azure Database for PostgreSQL Flexible Server (`segpractice-pg-****`), database `segment`
+- Secrets in Key Vault: `postgres-admin-password`, `postgres-fqdn`, `postgres-connection-string`
+- Terraform state RG: `segment-practice-tfstate-rg` (bootstrap only; not app infra)
 - Region: `UK South`
 
 ## Out of scope for v0

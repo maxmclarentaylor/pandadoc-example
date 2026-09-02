@@ -1,0 +1,8 @@
+# Copy values from bootstrap output after you create the state storage.
+# Used as: terraform init -backend-config=backend.hcl
+
+resource_group_name  = "segment-practice-tfstate-rg"
+storage_account_name = "REPLACE_AFTER_BOOTSTRAP"
+container_name       = "tfstate"
+key                  = "dev/terraform.tfstate"
+use_azuread_auth     = true
