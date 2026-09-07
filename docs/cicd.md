@@ -62,7 +62,10 @@ echo "AZURE_SUBSCRIPTION_ID=$SUBSCRIPTION_ID"
 
 ## GitHub secrets & variables
 
-Repo → **Settings → Secrets and variables → Actions**
+Put these on the GitHub Environment named **`dev`** (not only repo-level).
+Workflows use `environment: dev` so they can read them.
+
+Repo → **Settings → Environments → dev**
 
 **Secrets**
 - `AZURE_CLIENT_ID` — from command output above
@@ -75,6 +78,10 @@ Repo → **Settings → Secrets and variables → Actions**
 - `TF_STATE_STORAGE` = `segpracttfstatee6d6b7`
 - `AZURE_API_WEBAPP_NAME` = `segpractice-api-r5bq`
 - `VITE_API_BASE` = `https://segpractice-api-r5bq.azurewebsites.net`
+
+Also add an Entra federated credential for the environment subject:
+`repo:maxmclarentaylor/segment-practice:environment:dev`
+(in addition to `main` / `pull_request`).
 
 ## Live hosts (after Terraform apply)
 - API: `https://segpractice-api-r5bq.azurewebsites.net`
