@@ -19,31 +19,7 @@ jobs:
       run:
         working-directory: apps/api
     steps:
-      - uses: actions/checkout@v4
-
-      # Temporary: shows the OIDC "sub" claim Azure must match exactly
-      - name: Debug OIDC claims
-        working-directory: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          TOKEN=$(curl -sS \
-            -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            -H "Accept: application/json; api-version=2.0" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=api://AzureADTokenExchange" \
-            | python3 -c 'import sys,json; print(json.load(sys.stdin)["value"])')
-          python3 - "$TOKEN" <<'PY'
-          import sys, json, base64
-          token = sys.argv[1]
-          payload = token.split(".")[1]
-          payload += "=" * (-len(payload) % 4)
-          claims = json.loads(base64.urlsafe_b64decode(payload.encode()))
-          print("OIDC sub:", claims.get("sub"))
-          print("OIDC aud:", claims.get("aud"))
-          print("OIDC iss:", claims.get("iss"))
-          print("repository:", claims.get("repository"))
-          print("ref:", claims.get("ref"))
-          print("environment:", claims.get("environment"))
-          PY
+      - uses: actions/checkout@v5
 
       - name: Azure login (OIDC)
         uses: azure/login@v2
