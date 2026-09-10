@@ -90,6 +90,14 @@ Also add an Entra federated credential for the environment subject GitHub actual
 - API: `https://segpractice-api-r5bq.azurewebsites.net`
 - Web: `https://red-island-0d916eb03.5.azurestaticapps.net`
 
+## GitHub Actions service principal (least privilege)
+App: `segment-practice-github` (`AZURE_CLIENT_ID`).
+
+Scoped roles (not subscription-wide Contributor):
+- **Contributor** on `segment-practice-dev-rg`
+- **User Access Administrator** on `segment-practice-dev-rg` (Terraform role assignments)
+- **Storage Blob Data Contributor** on tfstate storage `segpracttfstatee6d6b7`
+
 ## Workflows
 - `.github/workflows/terraform.yml` — plan on PR, apply on main
 - `.github/workflows/deploy-api.yml` — zip-deploy API to App Service
