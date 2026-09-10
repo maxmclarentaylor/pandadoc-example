@@ -79,9 +79,12 @@ Repo → **Settings → Environments → dev**
 - `AZURE_API_WEBAPP_NAME` = `segpractice-api-r5bq`
 - `VITE_API_BASE` = `https://segpractice-api-r5bq.azurewebsites.net`
 
-Also add an Entra federated credential for the environment subject:
-`repo:maxmclarentaylor/segment-practice:environment:dev`
-(in addition to `main` / `pull_request`).
+Also add an Entra federated credential for the environment subject GitHub actually issues
+(include numeric owner/repo IDs), e.g.:
+
+`repo:maxmclarentaylor@42745017/segment-practice@1354553004:environment:dev`
+
+(not the older form `repo:maxmclarentaylor/segment-practice:environment:dev`).
 
 ## Live hosts (after Terraform apply)
 - API: `https://segpractice-api-r5bq.azurewebsites.net`
