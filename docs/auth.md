@@ -5,13 +5,15 @@ decode/verify the JWT. Protected routes: `/v1/me`, `/v1/track`, `/v1/events`.
 `/health` stays public.
 
 ```
-Browser → Entra login UI → access token (JWT)
-       → GET /v1/me  Authorization: Bearer <token>
-       → API verifies signature (JWKS) + iss + aud → returns your claims
+Browser → Entra login UI (once) → access + refresh tokens cached (localStorage)
+       → API calls use acquireTokenSilent (renews access token without UI)
+       → GET /v1/me|track|events  Authorization: Bearer <token>
+       → API verifies JWT → claims
 ```
 
-Silent token refresh can come later; today we use popup login and `acquireTokenSilent`
-with a popup fallback.
+Interactive popup is only for **Sign in** / **Sign out**. Mid-session API calls
+renew silently; if Entra requires interaction again, the app clears the session
+and shows Sign in.
 
 ## Portal setup (Entra admin center)
 
