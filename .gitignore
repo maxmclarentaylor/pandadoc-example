@@ -24,4 +24,5 @@ __pycache__/
 # Node / React
 node_modules/
 dist/
+.env.local
 .DS_Store

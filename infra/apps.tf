@@ -49,6 +49,9 @@ resource "azurerm_linux_web_app" "api" {
     WEBSITES_PORT                  = "8000"
     SCM_DO_BUILD_DURING_DEPLOYMENT = "true"
     DATABASE_URL                   = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault.dev.vault_uri}secrets/postgres-connection-string/)"
+    AZURE_TENANT_ID                = var.entra_tenant_id
+    AZURE_API_CLIENT_ID            = var.entra_api_client_id
+    AZURE_API_AUDIENCE             = "api://${var.entra_api_client_id}"
     ALLOWED_ORIGINS = join(",", compact([
       "http://localhost:5173",
       "http://127.0.0.1:5173",

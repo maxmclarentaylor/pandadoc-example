@@ -90,6 +90,15 @@ Also add an Entra federated credential for the environment subject GitHub actual
 - API: `https://segpractice-api-r5bq.azurewebsites.net`
 - Web: `https://red-island-0d916eb03.5.azurestaticapps.net`
 
+## GitHub Environment `dev` variables (web build)
+
+- `VITE_API_BASE` — API origin for the built SPA
+- `VITE_AZURE_TENANT_ID` — Entra tenant
+- `VITE_AZURE_CLIENT_ID` — SPA app registration client ID
+- `VITE_AZURE_API_SCOPE` — e.g. `api://<api-app-id>/access_as_user`
+
+See `docs/auth.md` for Entra caller auth details.
+
 ## GitHub Actions service principal (least privilege)
 App: `segment-practice-github` (`AZURE_CLIENT_ID`).
 

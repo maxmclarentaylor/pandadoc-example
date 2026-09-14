@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { FormEvent } from 'react'
-import { listEvents, trackEvent } from './api'
-import type { EventRecord } from './api'
+import { fetchMe, listEvents, trackEvent } from './api'
+import type { EventRecord, MeResponse } from './api'
+import { useAuth } from './useAuth'
 import './App.css'
 
 function newMessageId() {
@@ -9,6 +10,10 @@ function newMessageId() {
 }
 
 export default function App() {
+  const auth = useAuth()
+  const [me, setMe] = useState<MeResponse | null>(null)
+  const [authError, setAuthError] = useState<string | null>(null)
+
   const [messageId, setMessageId] = useState(newMessageId)
   const [userId, setUserId] = useState('user_123')
   const [eventName, setEventName] = useState('Page Viewed')
@@ -21,16 +26,34 @@ export default function App() {
   const refresh = useCallback(async () => {
     setError(null)
     try {
-      const rows = await listEvents(30)
+      const token = await auth.getAccessToken()
+      const rows = await listEvents(30, token)
       setEvents(rows)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load events')
     }
-  }, [])
+  }, [auth.getAccessToken])
 
+  // After login: get access token → API decodes JWT → show who you are
   useEffect(() => {
-    void refresh()
-  }, [refresh])
+    if (!auth.account) {
+      setMe(null)
+      setEvents([])
+      return
+    }
+    void (async () => {
+      setAuthError(null)
+      try {
+        const token = await auth.getAccessToken()
+        const profile = await fetchMe(token)
+        setMe(profile)
+        await refresh()
+      } catch (err) {
+        setMe(null)
+        setAuthError(err instanceof Error ? err.message : 'Failed to validate token with API')
+      }
+    })()
+  }, [auth.account, auth.getAccessToken, refresh])
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
@@ -48,12 +71,16 @@ export default function App() {
     }
 
     try {
-      const result = await trackEvent({
-        message_id: messageId,
-        user_id: userId || undefined,
-        event: eventName,
-        properties,
-      })
+      const token = await auth.getAccessToken()
+      const result = await trackEvent(
+        {
+          message_id: messageId,
+          user_id: userId || undefined,
+          event: eventName,
+          properties,
+        },
+        token,
+      )
       setStatus(`${result.status}: ${result.message_id}`)
       setMessageId(newMessageId())
       await refresh()
@@ -64,13 +91,67 @@ export default function App() {
     }
   }
 
+  if (!auth.ready) {
+    return (
+      <div className="page">
+        <p className="lede">Loading…</p>
+      </div>
+    )
+  }
+
+  // Login-first gate — event console only after Entra says who you are
+  if (!auth.account || !me) {
+    return (
+      <div className="page">
+        <header className="hero">
+          <p className="brand">segment-practice</p>
+          <h1>Sign in</h1>
+          <p className="lede">
+            Microsoft Entra ID login. The SPA gets an access token; the API verifies the JWT.
+          </p>
+        </header>
+
+        {!auth.configured ? (
+          <p className="flash err">
+            Set VITE_AZURE_TENANT_ID, VITE_AZURE_CLIENT_ID, and VITE_AZURE_API_SCOPE (see docs/auth.md).
+          </p>
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              setAuthError(null)
+              void auth.login().catch((err: unknown) => {
+                setAuthError(err instanceof Error ? err.message : 'Login failed')
+              })
+            }}
+          >
+            Sign in with Microsoft
+          </button>
+        )}
+
+        {auth.account && !me && !authError ? (
+          <p className="lede">Checking access token with API…</p>
+        ) : null}
+        {authError ? <p className="flash err">{authError}</p> : null}
+      </div>
+    )
+  }
+
   return (
     <div className="page">
       <header className="hero">
-        <p className="brand">segment-practice</p>
+        <div className="hero-top">
+          <p className="brand">segment-practice</p>
+          <div className="auth-bar">
+            <span className="auth-user">{me.preferred_username ?? me.name ?? me.oid}</span>
+            <button type="button" className="ghost" onClick={() => void auth.logout()}>
+              Sign out
+            </button>
+          </div>
+        </div>
         <h1>Event console</h1>
         <p className="lede">
-          Send Segment-style track calls and inspect recent events from Postgres.
+          Signed in via Entra. Track and list send the same access token as /v1/me.
         </p>
       </header>
 
@@ -78,7 +159,7 @@ export default function App() {
         <section className="panel" aria-labelledby="send-heading">
           <div className="panel-head">
             <h2 id="send-heading">Send event</h2>
-            <p>POST /v1/track</p>
+            <p>POST /v1/track (bearer token)</p>
           </div>
 
           <form className="form" onSubmit={onSubmit}>
@@ -116,7 +197,7 @@ export default function App() {
           <div className="panel-head row">
             <div>
               <h2 id="list-heading">Recent events</h2>
-              <p>GET /v1/events</p>
+              <p>GET /v1/events (bearer token)</p>
             </div>
             <button type="button" className="ghost" onClick={() => void refresh()}>
               Refresh

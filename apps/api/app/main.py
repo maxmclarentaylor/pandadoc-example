@@ -2,10 +2,11 @@ from datetime import datetime, timezone
 from typing import Any
 import os
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.types.json import Jsonb
 
+from app.auth import require_entra_user
 from app.db import get_connection, init_db
 from app.models import EventRecord, TrackEvent
 
@@ -44,8 +45,24 @@ def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/v1/me")
+def me(claims: dict[str, Any] = Depends(require_entra_user)) -> dict[str, Any]:
+    """Prove login: API decodes the Entra access token and returns who you are."""
+    return {
+        "oid": claims.get("oid"),
+        "name": claims.get("name"),
+        "preferred_username": claims.get("preferred_username") or claims.get("upn"),
+        "scp": claims.get("scp"),
+        "aud": claims.get("aud"),
+        "iss": claims.get("iss"),
+    }
+
+
 @app.post("/v1/track", status_code=201)
-def track(event: TrackEvent) -> dict[str, Any]:
+def track(
+    event: TrackEvent,
+    _claims: dict[str, Any] = Depends(require_entra_user),
+) -> dict[str, Any]:
     if not event.anonymous_id and not event.user_id:
         raise HTTPException(
             status_code=400,
@@ -86,7 +103,10 @@ def track(event: TrackEvent) -> dict[str, Any]:
 
 
 @app.get("/v1/events", response_model=list[EventRecord])
-def list_events(limit: int = Query(default=20, ge=1, le=100)) -> list[EventRecord]:
+def list_events(
+    limit: int = Query(default=20, ge=1, le=100),
+    _claims: dict[str, Any] = Depends(require_entra_user),
+) -> list[EventRecord]:
     select_sql = """
         SELECT
             message_id,
