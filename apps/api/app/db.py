@@ -1,9 +1,15 @@
-import os
-from pathlib import Path
+"""Database engine, sessions, and table bootstrap."""
 
-import psycopg
+from __future__ import annotations
+
+import os
+from collections.abc import Generator
+
 from dotenv import load_dotenv
-from psycopg.rows import dict_row
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+
+from app.orm import Base
 
 load_dotenv()
 
@@ -14,15 +20,26 @@ if not DATABASE_URL:
         "postgres-connection-string secret from Key Vault."
     )
 
+# SQLAlchemy + psycopg3 needs the +psycopg driver prefix.
+_sa_url = DATABASE_URL
+if _sa_url.startswith("postgresql://"):
+    _sa_url = _sa_url.replace("postgresql://", "postgresql+psycopg://", 1)
+elif _sa_url.startswith("postgres://"):
+    _sa_url = _sa_url.replace("postgres://", "postgresql+psycopg://", 1)
 
-def get_connection():
-    return psycopg.connect(DATABASE_URL, row_factory=dict_row)
+engine = create_engine(_sa_url, pool_pre_ping=True)
+SessionLocal = sessionmaker(bind=engine, autocommit=False, autoflush=False)
+
+
+def get_db() -> Generator[Session, None, None]:
+    """FastAPI dependency — one session per request."""
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 
 def init_db() -> None:
-    schema_path = Path(__file__).with_name("schema.sql")
-    schema_sql = schema_path.read_text()
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(schema_sql)
-        conn.commit()
+    """Create tables/indexes from ORM metadata if they do not already exist."""
+    Base.metadata.create_all(bind=engine)

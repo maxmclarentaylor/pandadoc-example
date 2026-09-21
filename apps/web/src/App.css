@@ -63,6 +63,11 @@
   grid-template-columns: 1fr;
 }
 
+.stack {
+  display: grid;
+  gap: 1.25rem;
+}
+
 @media (min-width: 900px) {
   .layout {
     grid-template-columns: 0.95fr 1.05fr;

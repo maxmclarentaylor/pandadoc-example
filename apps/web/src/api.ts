@@ -19,6 +19,19 @@ export type EventRecord = {
   received_at: string
 }
 
+export type IdentifyPayload = {
+  user_id: string
+  anonymous_id?: string
+  traits?: Record<string, unknown>
+}
+
+export type ProfileRecord = {
+  user_id: string
+  anonymous_id: string | null
+  traits: Record<string, unknown>
+  updated_at: string
+}
+
 export type MeResponse = {
   oid: string | null
   name: string | null
@@ -112,4 +125,22 @@ export function trackEvent(
   getAccessToken: GetAccessToken,
 ): Promise<{ status: string; message_id: string }> {
   return apiPost<{ status: string; message_id: string }>('/v1/track', payload, getAccessToken)
+}
+
+export function identifyUser(
+  payload: IdentifyPayload,
+  getAccessToken: GetAccessToken,
+): Promise<{ status: string; user_id: string; traits: Record<string, unknown> }> {
+  return apiPost<{ status: string; user_id: string; traits: Record<string, unknown> }>(
+    '/v1/identify',
+    payload,
+    getAccessToken,
+  )
+}
+
+export function listProfiles(
+  limit: number,
+  getAccessToken: GetAccessToken,
+): Promise<ProfileRecord[]> {
+  return apiGet<ProfileRecord[]>('/v1/profiles', getAccessToken, { limit })
 }

@@ -1,13 +1,14 @@
 # Architecture (v0)
 
 ## Product slice
-- Ingest events (Segment-like)
+- Ingest events (Segment-like `track`)
+- Identify users / traits (Segment-like `identify`)
 - Store + query recent events (Mixpanel-like, minimal)
 
 ## Components
-- **web (React):** send test events, list recent events
-- **api (Python):** HTTP API
-- **db (SQL):** durable event store
+- **web (React):** send test events / identifies, list recent events + profiles
+- **api (Python):** HTTP API (FastAPI + SQLAlchemy ORM + Pydantic schemas)
+- **db (SQL):** durable event + profile store
 - **infra (Terraform):** Azure resources for `dev`
 
 ## Event model (v0)
@@ -19,9 +20,18 @@
 | `properties` | JSON object |
 | `timestamp` | when it happened |
 
+## Profile model (v0)
+| Field | Notes |
+|--------|--------|
+| `user_id` | primary key; one profile per known user |
+| `anonymous_id` | optional stitch from pre-login browsing |
+| `traits` | JSON object (email, name, plan, …); merged on re-identify |
+
 ## API (v0)
 - `POST /v1/track` — accept one event, write to SQL
 - `GET /v1/events` — return recent events
+- `POST /v1/identify` — upsert user traits
+- `GET /v1/profiles` — return recent profiles
 
 ## Azure naming (dev)
 - Resource group: `segment-practice-dev-rg`

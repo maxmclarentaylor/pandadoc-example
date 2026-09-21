@@ -9,16 +9,17 @@ import os
 
 from fastapi import Depends, FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from psycopg.types.json import Jsonb
+from sqlalchemy.orm import Session
 
+from app import crud
 from app.auth import require_entra_user
-from app.db import get_connection, init_db
-from app.models import EventRecord, TrackEvent
+from app.db import get_db, init_db
+from app.schemas import EventRecord, IdentifyUser, ProfileRecord, TrackEvent
 
 app = FastAPI(
     title="segment-practice API",
     version="0.1.0",
-    description="v0 Segment-like track + Mixpanel-like recent events",
+    description="v0 Segment-like track/identify + Mixpanel-like recent events",
 )
 
 _default_origins = [
@@ -67,6 +68,7 @@ def me(claims: dict[str, Any] = Depends(require_entra_user)) -> dict[str, Any]:
 def track(
     event: TrackEvent,
     _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     if not event.anonymous_id and not event.user_id:
         raise HTTPException(
@@ -75,33 +77,17 @@ def track(
         )
 
     event_timestamp = event.timestamp or datetime.now(timezone.utc)
+    written_id = crud.insert_event(
+        db,
+        message_id=event.message_id,
+        anonymous_id=event.anonymous_id,
+        user_id=event.user_id,
+        event=event.event,
+        properties=event.properties,
+        event_timestamp=event_timestamp,
+    )
 
-    insert_sql = """
-        INSERT INTO events (
-            message_id, anonymous_id, user_id, event, properties, event_timestamp
-        ) VALUES (
-            %(message_id)s, %(anonymous_id)s, %(user_id)s, %(event)s, %(properties)s, %(event_timestamp)s
-        )
-        ON CONFLICT (message_id) DO NOTHING
-        RETURNING message_id
-    """
-
-    params = {
-        "message_id": event.message_id,
-        "anonymous_id": event.anonymous_id,
-        "user_id": event.user_id,
-        "event": event.event,
-        "properties": Jsonb(event.properties),
-        "event_timestamp": event_timestamp,
-    }
-
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(insert_sql, params)
-            row = cur.fetchone()
-        conn.commit()
-
-    if row is None:
+    if written_id is None:
         return {"status": "duplicate", "message_id": event.message_id}
 
     return {"status": "ok", "message_id": event.message_id}
@@ -111,24 +97,37 @@ def track(
 def list_events(
     limit: int = Query(default=20, ge=1, le=100),
     _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
 ) -> list[EventRecord]:
-    select_sql = """
-        SELECT
-            message_id,
-            anonymous_id,
-            user_id,
-            event,
-            properties,
-            event_timestamp,
-            received_at
-        FROM events
-        ORDER BY received_at DESC
-        LIMIT %(limit)s
-    """
+    rows = crud.list_events(db, limit=limit)
+    return [EventRecord.model_validate(row) for row in rows]
 
-    with get_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(select_sql, {"limit": limit})
-            rows = cur.fetchall()
 
-    return [EventRecord(**row) for row in rows]
+@app.post("/v1/identify", status_code=201)
+def identify(
+    body: IdentifyUser,
+    _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Upsert a user profile. New traits merge over existing keys (Segment-style)."""
+    profile = crud.upsert_profile(
+        db,
+        user_id=body.user_id,
+        anonymous_id=body.anonymous_id,
+        traits=body.traits,
+    )
+    return {
+        "status": "ok",
+        "user_id": profile.user_id,
+        "traits": profile.traits,
+    }
+
+
+@app.get("/v1/profiles", response_model=list[ProfileRecord])
+def list_profiles(
+    limit: int = Query(default=20, ge=1, le=100),
+    _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> list[ProfileRecord]:
+    rows = crud.list_profiles(db, limit=limit)
+    return [ProfileRecord.model_validate(row) for row in rows]
