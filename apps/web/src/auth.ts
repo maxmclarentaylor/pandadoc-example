@@ -32,18 +32,9 @@ let ready: Promise<void> | null = null
 
 export function initMsal(): Promise<void> {
   if (!ready) {
-    ready = msal.initialize().then(async () => {
-      let account = msal.getActiveAccount() ?? msal.getAllAccounts()[0] ?? null
-
-      if (!account && authConfigured) {
-        try {
-          const sso = await msal.ssoSilent({ scopes })
-          account = sso.account
-        } catch {
-          // User must click Sign in
-        }
-      }
-
+    ready = msal.initialize().then(() => {
+      const account = msal.getActiveAccount() ?? msal.getAllAccounts()[0] ?? null
+      // Do not call ssoSilent here — that would skip the Entra UI using the browser cookie.
       if (account) {
         msal.setActiveAccount(account)
       }
@@ -62,7 +53,11 @@ export function isInteractionRequired(err: unknown): boolean {
 
 export async function login(): Promise<AuthenticationResult> {
   await initMsal()
-  const result = await msal.loginPopup({ scopes })
+  // Always show Entra UI (don't silently reuse the Microsoft browser SSO session).
+  const result = await msal.loginPopup({
+    scopes,
+    prompt: 'select_account',
+  })
   msal.setActiveAccount(result.account)
   return result
 }
@@ -70,8 +65,14 @@ export async function login(): Promise<AuthenticationResult> {
 export async function logout(): Promise<void> {
   await initMsal()
   const account = getAccount()
-  await msal.logoutPopup({ account: account ?? undefined })
+  await msal.logoutPopup({
+    account: account ?? undefined,
+    // End the Microsoft session for this account so the next sign-in is not silent SSO.
+    postLogoutRedirectUri: window.location.origin,
+  })
   msal.setActiveAccount(null)
+  // Drop any leftover MSAL cache entries for this SPA.
+  await msal.clearCache()
 }
 
 /**

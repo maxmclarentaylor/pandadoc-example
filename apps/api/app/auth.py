@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import Any
+from typing import Any, Optional
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -40,7 +40,7 @@ def _jwks_client(jwks_uri: str) -> PyJWKClient:
 
 
 def require_entra_user(
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
 ) -> dict[str, Any]:
     """Decode + verify a Bearer access token from Entra ID."""
     cfg = _settings()
