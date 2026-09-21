@@ -1,3 +1,8 @@
+# Telemetry must run before FastAPI is imported (Azure Monitor FastAPI instrumentor).
+from app.telemetry import setup_telemetry
+
+setup_telemetry()
+
 from datetime import datetime, timezone
 from typing import Any
 import os

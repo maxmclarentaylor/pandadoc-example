@@ -50,6 +50,11 @@ See `docs/auth.md` for portal setup and the token flow.
 - **App Service:** **B1** + VNet integration (~£40/mo) — required for private DB path.
 See `docs/networking.md`.
 
+## App Insights (telemetry)
+- Resource: `segpractice-appi-*` (`terraform output app_insights_name`; connection string is an App Service setting).
+- API sends request telemetry when `APPLICATIONINSIGHTS_CONNECTION_STRING` is set (Azure); local uvicorn skips it.
+- After Deploy API: hit SWA track/list, then Portal → App Insights → **Transaction search** / **Performance** / **Failures**.
+
 ## GitHub Actions identity (RBAC)
 The Actions service principal is scoped to this project:
 - Contributor + User Access Administrator on `segment-practice-dev-rg`
