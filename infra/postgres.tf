@@ -1,7 +1,8 @@
 # Azure Database for PostgreSQL Flexible Server (dev)
 # - Managed Postgres (not a VM you patch)
-# - Public access + firewall rules for personal/dev simplicity
+# - Public access + tight firewall (client IP + App Service outbound IPs)
 # - Admin password stored in Key Vault
+# See docs/networking.md (Stage 3)
 
 resource "random_password" "postgres_admin" {
   length           = 24
@@ -45,14 +46,15 @@ resource "azurerm_postgresql_flexible_server_database" "app" {
   collation = "en_US.utf8"
 }
 
-# 0.0.0.0–0.0.0.0 = allow Azure services (App Service, etc. later)
-resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_azure" {
-  name             = "AllowAzureServices"
-  server_id        = azurerm_postgresql_flexible_server.dev.id
-  start_ip_address = "0.0.0.0"
-  end_ip_address   = "0.0.0.0"
+# TLS required for client connections (explicit; Azure default is already on)
+resource "azurerm_postgresql_flexible_server_configuration" "require_secure_transport" {
+  name      = "require_secure_transport"
+  server_id = azurerm_postgresql_flexible_server.dev.id
+  value     = "on"
 }
 
+# Your laptop / local tooling only — not a wide open Azure allow-list.
+# App Service reaches Postgres via explicit outbound-IP rules in apps.tf.
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_client" {
   name             = "AllowClientDev"
   server_id        = azurerm_postgresql_flexible_server.dev.id

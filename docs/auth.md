@@ -5,15 +5,20 @@ decode/verify the JWT. Protected routes: `/v1/me`, `/v1/track`, `/v1/events`.
 `/health` stays public.
 
 ```
-Browser → Entra login UI (once) → access + refresh tokens cached (localStorage)
-       → API calls use acquireTokenSilent (renews access token without UI)
-       → GET /v1/me|track|events  Authorization: Bearer <token>
-       → API verifies JWT → claims
+Browser → Entra login (once) → access token stored in React Context
+       → every 15 minutes: silent renew (acquireTokenSilent) updates Context
+       → apiGet / apiPost(endpoint, getAccessToken, body?) attach Bearer token
+       → API verifies JWT
 ```
 
-Interactive popup is only for **Sign in** / **Sign out**. Mid-session API calls
-renew silently; if Entra requires interaction again, the app clears the session
-and shows Sign in.
+| Piece | Role |
+|-------|------|
+| `AuthProvider` / `useAuth` | Vanilla Context — account + `accessToken` + `getAccessToken` |
+| `TOKEN_REFRESH_INTERVAL_MS` | Proactive silent refresh (15 minutes) |
+| `apiGet` / `apiPost` | Dynamic REST helpers for any endpoint |
+| `fetchMe` / `listEvents` / `trackEvent` | Thin wrappers over `apiGet` / `apiPost` |
+
+Interactive popup is only for **Sign in** / **Sign out**.
 
 ## Portal setup (Entra admin center)
 
@@ -75,8 +80,9 @@ VITE_AZURE_API_SCOPE=api://a4f8ea2d-a323-4974-96f2-f796ea0b18c0/access_as_user
 
 | Piece | Role |
 |-------|------|
-| `apps/web/src/useAuth.ts` | Hook: login / logout / getAccessToken |
-| `apps/web/src/auth.ts` | Thin MSAL wrapper (popup) |
+| `apps/web/src/AuthContext.tsx` | Context provider + `useAuth` |
+| `apps/web/src/auth.ts` | Thin MSAL wrapper |
+| `apps/web/src/api.ts` | `apiGet` / `apiPost` + route helpers |
 | `apps/api/app/auth.py` | JWT decode via Entra JWKS |
 | `GET /v1/me` | Protected route that returns decoded claims |
 

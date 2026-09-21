@@ -44,6 +44,10 @@ Entra ID JWTs on `/v1/me`, `/v1/track`, `/v1/events` (`/health` public).
 See `docs/auth.md` for portal setup and the token flow.
 - App Service still uses **managed identity** → Key Vault for `DATABASE_URL`
 
+## Networking (Stage 3)
+Postgres is public but **firewall-restricted**: your client IP + App Service outbound IPs.
+See `docs/networking.md`. TLS required (`require_secure_transport`).
+
 ## GitHub Actions identity (RBAC)
 The Actions service principal is scoped to this project:
 - Contributor + User Access Administrator on `segment-practice-dev-rg`

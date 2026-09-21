@@ -66,6 +66,20 @@ resource "azurerm_role_assignment" "api_kv_secrets_user" {
   principal_id         = azurerm_linux_web_app.api.identity[0].principal_id
 }
 
+# Stage 3: allow App Service → Postgres by outbound IP (not "Allow Azure services").
+# possible_outbound_ip_addresses covers current + candidates if the platform moves you.
+resource "azurerm_postgresql_flexible_server_firewall_rule" "app_service" {
+  for_each = toset([
+    for ip in split(",", azurerm_linux_web_app.api.possible_outbound_ip_addresses) : trimspace(ip)
+    if trimspace(ip) != ""
+  ])
+
+  name             = "AppService-${replace(each.value, ".", "-")}"
+  server_id        = azurerm_postgresql_flexible_server.dev.id
+  start_ip_address = each.value
+  end_ip_address   = each.value
+}
+
 resource "azurerm_static_web_app" "web" {
   name                = "segpractice-web-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.dev.name

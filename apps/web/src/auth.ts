@@ -2,6 +2,7 @@ import {
   InteractionRequiredAuthError,
   PublicClientApplication,
   type AccountInfo,
+  type AuthenticationResult,
 } from '@azure/msal-browser'
 
 const tenantId = import.meta.env.VITE_AZURE_TENANT_ID as string | undefined
@@ -9,6 +10,9 @@ const clientId = import.meta.env.VITE_AZURE_CLIENT_ID as string | undefined
 const apiScope = import.meta.env.VITE_AZURE_API_SCOPE as string | undefined
 
 export const authConfigured = Boolean(tenantId && clientId && apiScope)
+
+/** How often AuthProvider silently renews the access token in the background. */
+export const TOKEN_REFRESH_INTERVAL_MS = 15 * 60 * 1000
 
 const scopes = apiScope ? [apiScope] : []
 
@@ -20,7 +24,6 @@ export const msal = new PublicClientApplication({
     postLogoutRedirectUri: window.location.origin,
   },
   cache: {
-    // Persist across reloads so acquireTokenSilent can renew without a popup
     cacheLocation: 'localStorage',
   },
 })
@@ -32,13 +35,12 @@ export function initMsal(): Promise<void> {
     ready = msal.initialize().then(async () => {
       let account = msal.getActiveAccount() ?? msal.getAllAccounts()[0] ?? null
 
-      // Soft restore: use existing SSO session if we have no cached account yet
       if (!account && authConfigured) {
         try {
           const sso = await msal.ssoSilent({ scopes })
           account = sso.account
         } catch {
-          // No silent SSO available — user must click Sign in
+          // User must click Sign in
         }
       }
 
@@ -58,12 +60,11 @@ export function isInteractionRequired(err: unknown): boolean {
   return err instanceof InteractionRequiredAuthError
 }
 
-/** Interactive login only — Microsoft hosted UI (popup). */
-export async function login(): Promise<AccountInfo> {
+export async function login(): Promise<AuthenticationResult> {
   await initMsal()
   const result = await msal.loginPopup({ scopes })
   msal.setActiveAccount(result.account)
-  return result.account
+  return result
 }
 
 export async function logout(): Promise<void> {
@@ -74,11 +75,10 @@ export async function logout(): Promise<void> {
 }
 
 /**
- * Access token for API calls — silent only.
- * MSAL renews via the cached refresh token when the access token is near expiry.
- * If Entra requires user interaction again, throws (UI should send user to Sign in).
+ * Silent acquire — uses MSAL cache / refresh token. No UI.
+ * Returns the full result so callers can store the access token.
  */
-export async function getAccessToken(): Promise<string> {
+export async function acquireTokenSilent(): Promise<AuthenticationResult> {
   await initMsal()
   if (!authConfigured) {
     throw new Error('Missing VITE_AZURE_TENANT_ID / VITE_AZURE_CLIENT_ID / VITE_AZURE_API_SCOPE')
@@ -90,8 +90,7 @@ export async function getAccessToken(): Promise<string> {
   }
 
   try {
-    const silent = await msal.acquireTokenSilent({ account, scopes })
-    return silent.accessToken
+    return await msal.acquireTokenSilent({ account, scopes })
   } catch (err) {
     if (isInteractionRequired(err)) {
       msal.setActiveAccount(null)

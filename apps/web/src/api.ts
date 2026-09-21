@@ -1,3 +1,6 @@
+/** Resolves a Bearer access token (from AuthContext / useAuth). */
+export type GetAccessToken = () => Promise<string>
+
 export type TrackPayload = {
   message_id: string
   event: string
@@ -27,51 +30,86 @@ export type MeResponse = {
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://127.0.0.1:8000'
 
-function bearerHeaders(accessToken: string, json = false): HeadersInit {
-  const headers: Record<string, string> = {
-    Authorization: `Bearer ${accessToken}`,
+function buildUrl(endpoint: string, query?: Record<string, string | number | boolean | undefined>) {
+  const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`
+  const url = new URL(`${API_BASE}${path}`)
+  if (query) {
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) {
+        url.searchParams.set(key, String(value))
+      }
+    }
   }
-  if (json) {
-    headers['Content-Type'] = 'application/json'
-  }
-  return headers
+  return url.toString()
 }
 
-/** Call a protected route with an Entra access token. */
-export async function fetchMe(accessToken: string): Promise<MeResponse> {
-  const res = await fetch(`${API_BASE}/v1/me`, {
-    headers: bearerHeaders(accessToken),
+async function parseError(res: Response, fallback: string): Promise<never> {
+  const detail = await res.text()
+  throw new Error(detail || `${fallback} (${res.status})`)
+}
+
+/**
+ * Dynamic authenticated GET.
+ * @param endpoint e.g. `/v1/me` or `v1/events`
+ * @param getAccessToken from `useAuth()`
+ */
+export async function apiGet<T>(
+  endpoint: string,
+  getAccessToken: GetAccessToken,
+  query?: Record<string, string | number | boolean | undefined>,
+): Promise<T> {
+  const accessToken = await getAccessToken()
+  const res = await fetch(buildUrl(endpoint, query), {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
   })
   if (!res.ok) {
-    const detail = await res.text()
-    throw new Error(detail || `Me failed (${res.status})`)
+    await parseError(res, `GET ${endpoint} failed`)
   }
-  return res.json()
+  return res.json() as Promise<T>
 }
 
-export async function trackEvent(
-  payload: TrackPayload,
-  accessToken: string,
-): Promise<{ status: string; message_id: string }> {
-  const res = await fetch(`${API_BASE}/v1/track`, {
+/**
+ * Dynamic authenticated POST.
+ * @param endpoint e.g. `/v1/track`
+ * @param body JSON-serializable request body
+ * @param getAccessToken from `useAuth()`
+ */
+export async function apiPost<T>(
+  endpoint: string,
+  body: unknown,
+  getAccessToken: GetAccessToken,
+): Promise<T> {
+  const accessToken = await getAccessToken()
+  const res = await fetch(buildUrl(endpoint), {
     method: 'POST',
-    headers: bearerHeaders(accessToken, true),
-    body: JSON.stringify(payload),
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
   })
   if (!res.ok) {
-    const detail = await res.text()
-    throw new Error(detail || `Track failed (${res.status})`)
+    await parseError(res, `POST ${endpoint} failed`)
   }
-  return res.json()
+  return res.json() as Promise<T>
 }
 
-export async function listEvents(limit = 20, accessToken: string): Promise<EventRecord[]> {
-  const res = await fetch(`${API_BASE}/v1/events?limit=${limit}`, {
-    headers: bearerHeaders(accessToken),
-  })
-  if (!res.ok) {
-    const detail = await res.text()
-    throw new Error(detail || `List failed (${res.status})`)
-  }
-  return res.json()
+/** Convenience wrappers — all go through apiGet / apiPost. */
+
+export function fetchMe(getAccessToken: GetAccessToken): Promise<MeResponse> {
+  return apiGet<MeResponse>('/v1/me', getAccessToken)
+}
+
+export function listEvents(limit: number, getAccessToken: GetAccessToken): Promise<EventRecord[]> {
+  return apiGet<EventRecord[]>('/v1/events', getAccessToken, { limit })
+}
+
+export function trackEvent(
+  payload: TrackPayload,
+  getAccessToken: GetAccessToken,
+): Promise<{ status: string; message_id: string }> {
+  return apiPost<{ status: string; message_id: string }>('/v1/track', payload, getAccessToken)
 }
