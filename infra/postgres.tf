@@ -1,8 +1,8 @@
 # Azure Database for PostgreSQL Flexible Server (dev)
 # - Managed Postgres (not a VM you patch)
-# - Public access + tight firewall (client IP + App Service outbound IPs)
-# - Admin password stored in Key Vault
-# See docs/networking.md (Stage 3)
+# - Stage 4: App Service → Postgres via Private Endpoint (see networking.tf)
+# - Public access kept for laptop tooling (client IP firewall only)
+# See docs/networking.md
 
 resource "random_password" "postgres_admin" {
   length           = 24
@@ -53,8 +53,7 @@ resource "azurerm_postgresql_flexible_server_configuration" "require_secure_tran
   value     = "on"
 }
 
-# Your laptop / local tooling only — not a wide open Azure allow-list.
-# App Service reaches Postgres via explicit outbound-IP rules in apps.tf.
+# Laptop / local tooling only. App Service uses Private Endpoint (not this rule).
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_client" {
   name             = "AllowClientDev"
   server_id        = azurerm_postgresql_flexible_server.dev.id

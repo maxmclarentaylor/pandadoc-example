@@ -44,9 +44,11 @@ Entra ID JWTs on `/v1/me`, `/v1/track`, `/v1/events` (`/health` public).
 See `docs/auth.md` for portal setup and the token flow.
 - App Service still uses **managed identity** → Key Vault for `DATABASE_URL`
 
-## Networking (Stage 3)
-Postgres is public but **firewall-restricted**: your client IP + App Service outbound IPs.
-See `docs/networking.md`. TLS required (`require_secure_transport`).
+## Networking (Stage 3–4)
+- **Postgres:** App Service via **Private Endpoint** (VNet); laptop via public firewall (your IP). TLS required.
+- **Key Vault:** Deny by default; `AzureServices` bypass + your IP. Apply Terraform from that IP.
+- **App Service:** **B1** + VNet integration (~£40/mo) — required for private DB path.
+See `docs/networking.md`.
 
 ## GitHub Actions identity (RBAC)
 The Actions service principal is scoped to this project:

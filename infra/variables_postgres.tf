@@ -24,7 +24,7 @@ variable "postgres_version" {
 
 variable "postgres_client_ip" {
   type        = string
-  description = "Your public IP allowed to connect to Postgres (dev). Update if your home IP changes."
+  description = "Your public IP allow-listed for Postgres and Key Vault (dev). Update when your home IP changes."
   # Override via -var or *.tfvars (gitignored) when your ISP IP changes.
   default     = "79.77.111.71"
 }

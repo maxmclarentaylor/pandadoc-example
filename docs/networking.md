@@ -1,60 +1,63 @@
-# Networking (Stage 3)
+# Networking
 
-Goal: understand **who can reach** Postgres and secrets — not build a full private
-VNet yet (Free **F1** App Service cannot do VNet integration).
+Goal: control **who can reach** Postgres and secrets, then give the API a
+**private path** to the database (Stage 4).
 
-## Current posture (after Stage 3 tighten)
+## Current posture (Stage 4)
 
 ```
 Internet
   ├─ Browser → Static Web App (public HTTPS)
   ├─ Browser → App Service API (public HTTPS + Entra JWT)
-  └─ Your laptop → Postgres :5432  only if your IP is allow-listed
+  └─ Your laptop → Postgres :5432 / Key Vault  only if your IP is allow-listed
 
-App Service (outbound IPs)
-  └─ Postgres :5432  (explicit firewall rules — not "Allow Azure services")
-  └─ Key Vault       (MI + RBAC; still public endpoint for now)
+VNet (West Europe — same region as App Service)
+  ├─ snet-app          ← App Service VNet integration (B1)
+  └─ snet-pe           ← Private Endpoint NIC for Postgres
+
+App Service (via VNet)
+  ├─ Postgres          ← Private Endpoint + private DNS (not public IP allow-list)
+  └─ Key Vault         ← MI + RBAC; network bypass = AzureServices
 ```
 
-### Postgres Flexible Server
-- `public_network_access_enabled = true` (needed until Private Endpoint + VNet)
-- Firewall:
-  - **Your client IP** (`postgres_client_ip`) — local `psql` / tooling
-  - **App Service possible outbound IPs** — API → database
-- **No** `0.0.0.0` “Allow Azure services” rule (that allowed *any* Azure customer resource in theory)
-- `require_secure_transport = on` (TLS required)
+Postgres lives in **UK South**; the Private Endpoint sits in the **West Europe** VNet.
+Traffic uses Azure Private Link (not the public internet). Slight cross-region
+latency is fine for learning.
 
-### Why not Private Endpoint yet?
-| Approach | Pros | Cons for this project |
-|----------|------|------------------------|
-| Public + firewall (now) | Cheap, works on F1 | DB has a public DNS name |
-| Private Endpoint + VNet | No public DB | Needs VNet integration (not on Free F1), more cost/complexity |
+### Stage 3 (still true)
+- Postgres firewall: **your client IP** only (for laptop `psql`)
+- Key Vault: Deny + `AzureServices` bypass + your IP
+- TLS required on Postgres
 
-Upgrade App Service plan later → then revisit private access.
+### Stage 4 (new)
+| Piece | Why |
+|-------|-----|
+| VNet + two subnets | Private roads for app + endpoints |
+| App Service **B1** | F1 cannot join a VNet |
+| VNet integration + `vnet_route_all_enabled` | API outbound goes via the VNet |
+| Private Endpoint + `privatelink.postgres.database.azure.com` | DB reachable on a private IP from the VNet |
+| App Insights | Basic telemetry resource (wire SDK later if you want rich traces) |
+
+**Not done yet (optional later):** disable Postgres `public_network_access` entirely
+(needs VPN/jump box for laptop access).
+
+## Cost (ballpark)
+- B1 App Service: ~£35–45/month
+- Private Endpoint: ~£5–8/month
+- App Insights: usually free at this volume
+- Tear down PE + drop to F1 when you want to save money
 
 ## Ops: update your home IP
 
-Home ISP IPs change. If local DB tools fail:
-
 ```bash
 curl -s https://api.ipify.org; echo
-
-# Terraform: set postgres_client_ip in a local tfvars (gitignored) or -var
-# Then apply, or update the Azure rule directly:
-az postgres flexible-server firewall-rule update \
-  -g segment-practice-dev-rg -s segpractice-pg-r5bq \
-  -n AllowClientDev \
-  --start-ip-address YOUR_IP --end-ip-address YOUR_IP
+cd infra
+terraform apply -var="postgres_client_ip=YOUR_IP"
 ```
 
-List rules:
-
+## Apply
 ```bash
-az postgres flexible-server firewall-rule list \
-  -g segment-practice-dev-rg -s segpractice-pg-r5bq -o table
+cd infra
+terraform plan
+terraform apply
 ```
-
-## Later (Stage 3b / 4)
-- Key Vault firewall: `Deny` + `AzureServices` bypass + your IP (careful: GitHub Actions is *not* an Azure service — can break remote Terraform secret writes)
-- Private Endpoint for Postgres after leaving F1
-- App Insights / diagnostics for network failures

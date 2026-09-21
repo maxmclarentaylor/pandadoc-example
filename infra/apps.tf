@@ -1,34 +1,35 @@
 # API host (Linux App Service) + frontend (Static Web Apps)
-# Managed hosts — still not VMs.
+# Stage 4: B1 + VNet integration so the API reaches Postgres via Private Endpoint.
 
 resource "azurerm_service_plan" "api" {
   name                = "segpractice-plan-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.dev.name
-  # App Service compute quota is regional; UK South may be 0 on new subs.
+  # Same region as VNet (VNet integration must be regional).
   location = "westeurope"
   os_type  = "Linux"
-  # F1 avoids paid-plan VM quota issues on new/personal subscriptions.
-  # Upgrade to B1 later after a quota increase if you need Always On.
-  sku_name = "F1"
+  # B1 required for VNet integration (F1 cannot join a VNet).
+  sku_name = "B1"
   tags     = local.common_tags
 }
 
 resource "azurerm_linux_web_app" "api" {
-  name                = "segpractice-api-${random_string.suffix.result}"
-  resource_group_name = azurerm_resource_group.dev.name
-  location            = azurerm_service_plan.api.location
-  service_plan_id     = azurerm_service_plan.api.id
-  https_only          = true
-  tags                = local.common_tags
+  name                      = "segpractice-api-${random_string.suffix.result}"
+  resource_group_name       = azurerm_resource_group.dev.name
+  location                  = azurerm_service_plan.api.location
+  service_plan_id           = azurerm_service_plan.api.id
+  https_only                = true
+  virtual_network_subnet_id = azurerm_subnet.app.id
+  tags                      = local.common_tags
 
   identity {
     type = "SystemAssigned"
   }
 
   site_config {
-    always_on           = false # required for F1
-    ftps_state          = "Disabled"
-    minimum_tls_version = "1.2"
+    always_on              = true # allowed on B1
+    ftps_state             = "Disabled"
+    minimum_tls_version    = "1.2"
+    vnet_route_all_enabled = true # send outbound (incl. Private Endpoint) via VNet
 
     application_stack {
       python_version = "3.12"
@@ -46,12 +47,13 @@ resource "azurerm_linux_web_app" "api" {
   }
 
   app_settings = {
-    WEBSITES_PORT                  = "8000"
-    SCM_DO_BUILD_DURING_DEPLOYMENT = "true"
-    DATABASE_URL                   = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault.dev.vault_uri}secrets/postgres-connection-string/)"
-    AZURE_TENANT_ID                = var.entra_tenant_id
-    AZURE_API_CLIENT_ID            = var.entra_api_client_id
-    AZURE_API_AUDIENCE             = "api://${var.entra_api_client_id}"
+    WEBSITES_PORT                     = "8000"
+    SCM_DO_BUILD_DURING_DEPLOYMENT    = "true"
+    DATABASE_URL                      = "@Microsoft.KeyVault(SecretUri=${azurerm_key_vault.dev.vault_uri}secrets/postgres-connection-string/)"
+    AZURE_TENANT_ID                   = var.entra_tenant_id
+    AZURE_API_CLIENT_ID               = var.entra_api_client_id
+    AZURE_API_AUDIENCE                = "api://${var.entra_api_client_id}"
+    APPLICATIONINSIGHTS_CONNECTION_STRING = azurerm_application_insights.api.connection_string
     ALLOWED_ORIGINS = join(",", compact([
       "http://localhost:5173",
       "http://127.0.0.1:5173",
@@ -66,20 +68,6 @@ resource "azurerm_role_assignment" "api_kv_secrets_user" {
   principal_id         = azurerm_linux_web_app.api.identity[0].principal_id
 }
 
-# Stage 3: allow App Service → Postgres by outbound IP (not "Allow Azure services").
-# possible_outbound_ip_addresses covers current + candidates if the platform moves you.
-resource "azurerm_postgresql_flexible_server_firewall_rule" "app_service" {
-  for_each = toset([
-    for ip in split(",", azurerm_linux_web_app.api.possible_outbound_ip_addresses) : trimspace(ip)
-    if trimspace(ip) != ""
-  ])
-
-  name             = "AppService-${replace(each.value, ".", "-")}"
-  server_id        = azurerm_postgresql_flexible_server.dev.id
-  start_ip_address = each.value
-  end_ip_address   = each.value
-}
-
 resource "azurerm_static_web_app" "web" {
   name                = "segpractice-web-${random_string.suffix.result}"
   resource_group_name = azurerm_resource_group.dev.name
@@ -87,4 +75,12 @@ resource "azurerm_static_web_app" "web" {
   sku_tier            = "Free"
   sku_size            = "Free"
   tags                = local.common_tags
+
+  # GitHub connection is often set in portal / SWA token deploy — don't wipe it on apply.
+  lifecycle {
+    ignore_changes = [
+      repository_url,
+      repository_branch,
+    ]
+  }
 }

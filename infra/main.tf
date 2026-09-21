@@ -30,7 +30,20 @@ resource "azurerm_key_vault" "dev" {
   soft_delete_retention_days = 7
   purge_protection_enabled   = false
   rbac_authorization_enabled = true
-  tags                       = local.common_tags
+  # Still a public endpoint, but firewall restricts who can call it.
+  public_network_access_enabled = true
+  tags                          = local.common_tags
+
+  # Stage 3b: deny by default; allow your IP + trusted Azure services (App Service MI → secrets).
+  # GitHub Actions runners are NOT Azure services — remote Terraform that writes secrets will fail
+  # unless you apply from an allow-listed IP (or temporarily open the vault). See docs/networking.md.
+  network_acls {
+    default_action = "Deny"
+    bypass         = "AzureServices"
+    ip_rules       = [var.postgres_client_ip]
+    # App Service VNet integration subnet (Stage 4)
+    virtual_network_subnet_ids = [azurerm_subnet.app.id]
+  }
 }
 
 # So you can manage secrets in the portal / CLI after apply

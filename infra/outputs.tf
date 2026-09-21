@@ -50,3 +50,15 @@ output "web_api_token" {
   value     = azurerm_static_web_app.web.api_key
   sensitive = true
 }
+
+output "vnet_name" {
+  value = azurerm_virtual_network.dev.name
+}
+
+output "app_insights_name" {
+  value = azurerm_application_insights.api.name
+}
+
+output "postgres_private_endpoint_name" {
+  value = azurerm_private_endpoint.postgres.name
+}
