@@ -1,9 +1,9 @@
 # Networking
 
 Goal: control **who can reach** Postgres and secrets, then give the API a
-**private path** to the database (Stage 4).
+**private path** to both (Stage 4 / 4b).
 
-## Current posture (Stage 4)
+## Current posture (Stage 4b)
 
 ```
 Internet
@@ -13,39 +13,40 @@ Internet
 
 VNet (West Europe — same region as App Service)
   ├─ snet-app          ← App Service VNet integration (B1)
-  └─ snet-pe           ← Private Endpoint NIC for Postgres
+  └─ snet-pe           ← Private Endpoint NICs (Postgres + Key Vault)
 
 App Service (via VNet)
-  ├─ Postgres          ← Private Endpoint + private DNS (not public IP allow-list)
-  └─ Key Vault         ← MI + RBAC; network bypass = AzureServices
+  ├─ Postgres          ← Private Endpoint + privatelink.postgres.database.azure.com
+  └─ Key Vault         ← Private Endpoint + privatelink.vaultcore.azure.net
+                         (MI + RBAC still required; PE is the network path)
 ```
 
-Postgres lives in **UK South**; the Private Endpoint sits in the **West Europe** VNet.
-Traffic uses Azure Private Link (not the public internet). Slight cross-region
-latency is fine for learning.
+Postgres lives in **UK South**; Private Endpoints sit in the **West Europe** VNet.
+Traffic uses Azure Private Link (not the public internet).
 
 ### Stage 3 (still true)
 - Postgres firewall: **your client IP** only (for laptop `psql`)
-- Key Vault: Deny + `AzureServices` bypass + your IP
+- Key Vault: Deny + `AzureServices` bypass + your IP (for laptop Terraform/portal)
 - TLS required on Postgres
 
-### Stage 4 (new)
+### Stage 4 / 4b
 | Piece | Why |
 |-------|-----|
 | VNet + two subnets | Private roads for app + endpoints |
 | App Service **B1** | F1 cannot join a VNet |
-| VNet integration + `vnet_route_all_enabled` | API outbound goes via the VNet |
-| Private Endpoint + `privatelink.postgres.database.azure.com` | DB reachable on a private IP from the VNet |
-| App Insights | Basic telemetry resource (wire SDK later if you want rich traces) |
+| VNet integration + route-all | API outbound goes via the VNet |
+| Postgres Private Endpoint + private DNS | DB on a private IP from the VNet |
+| **Key Vault Private Endpoint + private DNS** | Secrets on a private IP from the VNet (Stage 4b) |
+| App Insights | Request telemetry (SDK wired in the API) |
 
-**Not done yet (optional later):** disable Postgres `public_network_access` entirely
+**Not done yet (optional later):** disable Postgres / Key Vault `public_network_access` entirely
 (needs VPN/jump box for laptop access).
 
 ## Cost (ballpark)
 - B1 App Service: ~£35–45/month
-- Private Endpoint: ~£5–8/month
+- Private Endpoint: ~£5–8/month **each** (Postgres + Key Vault ≈ £10–16)
 - App Insights: usually free at this volume
-- Tear down PE + drop to F1 when you want to save money
+- Tear down PEs + drop to F1 when you want to save money
 
 ## Ops: update your home IP
 
@@ -55,9 +56,12 @@ cd infra
 terraform apply -var="postgres_client_ip=YOUR_IP"
 ```
 
-## Apply
+## Apply Stage 4b (Key Vault PE)
+
 ```bash
 cd infra
 terraform plan
 terraform apply
 ```
+
+Then smoke: SWA sign-in → track / identify (proves App → PE → Key Vault → PE → Postgres).

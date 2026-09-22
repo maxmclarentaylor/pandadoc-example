@@ -1,7 +1,7 @@
-# Stage 4 — private path for App Service → Postgres
+# Stage 4 / 4b — private path for App Service → Postgres + Key Vault
 # VNet in West Europe (same region as App Service). Postgres stays in UK South;
 # Private Link carries traffic over the Azure backbone.
-# Laptop access: public Postgres firewall (client IP) still allowed for local tools.
+# Laptop access: public Postgres firewall + Key Vault IP allow-list still allowed.
 
 resource "azurerm_virtual_network" "dev" {
   name                = "segpractice-vnet-${random_string.suffix.result}"
@@ -72,6 +72,45 @@ resource "azurerm_private_endpoint" "postgres" {
   private_dns_zone_group {
     name                 = "postgres-dns-zone-group"
     private_dns_zone_ids = [azurerm_private_dns_zone.postgres.id]
+  }
+}
+
+# Stage 4b — Key Vault Private Endpoint (same pattern as Postgres).
+# App Service resolves vault FQDN → private IP via privatelink DNS.
+# Laptop still uses the public vault endpoint + IP allow-list for Terraform/portal.
+
+resource "azurerm_private_dns_zone" "key_vault" {
+  name                = "privatelink.vaultcore.azure.net"
+  resource_group_name = azurerm_resource_group.dev.name
+  tags                = local.common_tags
+}
+
+resource "azurerm_private_dns_zone_virtual_network_link" "key_vault" {
+  name                  = "link-keyvault-dns"
+  resource_group_name   = azurerm_resource_group.dev.name
+  private_dns_zone_name = azurerm_private_dns_zone.key_vault.name
+  virtual_network_id    = azurerm_virtual_network.dev.id
+  registration_enabled  = false
+  tags                  = local.common_tags
+}
+
+resource "azurerm_private_endpoint" "key_vault" {
+  name                = "pe-keyvault-${random_string.suffix.result}"
+  location            = azurerm_virtual_network.dev.location
+  resource_group_name = azurerm_resource_group.dev.name
+  subnet_id           = azurerm_subnet.private_endpoints.id
+  tags                = local.common_tags
+
+  private_service_connection {
+    name                           = "psc-keyvault"
+    private_connection_resource_id = azurerm_key_vault.dev.id
+    is_manual_connection           = false
+    subresource_names              = ["vault"]
+  }
+
+  private_dns_zone_group {
+    name                 = "keyvault-dns-zone-group"
+    private_dns_zone_ids = [azurerm_private_dns_zone.key_vault.id]
   }
 }
 

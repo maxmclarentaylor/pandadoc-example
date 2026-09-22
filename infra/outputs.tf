@@ -62,3 +62,7 @@ output "app_insights_name" {
 output "postgres_private_endpoint_name" {
   value = azurerm_private_endpoint.postgres.name
 }
+
+output "key_vault_private_endpoint_name" {
+  value = azurerm_private_endpoint.key_vault.name
+}
