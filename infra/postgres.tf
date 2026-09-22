@@ -1,7 +1,7 @@
 # Azure Database for PostgreSQL Flexible Server (dev)
 # - Managed Postgres (not a VM you patch)
 # - Stage 4: App Service → Postgres via Private Endpoint (see networking.tf)
-# - Public access kept for laptop tooling (client IP firewall only)
+# - Stage 5: set postgres_public_network_access=false after VPN works
 # See docs/networking.md
 
 resource "random_password" "postgres_admin" {
@@ -22,9 +22,9 @@ resource "azurerm_postgresql_flexible_server" "dev" {
   storage_mb = var.postgres_storage_mb
   zone       = "1"
 
-  backup_retention_days        = 7
-  geo_redundant_backup_enabled = false
-  public_network_access_enabled = true
+  backup_retention_days         = 7
+  geo_redundant_backup_enabled  = false
+  public_network_access_enabled = var.postgres_public_network_access
 
   authentication {
     password_auth_enabled         = true
@@ -53,8 +53,10 @@ resource "azurerm_postgresql_flexible_server_configuration" "require_secure_tran
   value     = "on"
 }
 
-# Laptop / local tooling only. App Service uses Private Endpoint (not this rule).
+# Laptop / local tooling only (removed when public access is disabled).
 resource "azurerm_postgresql_flexible_server_firewall_rule" "allow_client" {
+  count = var.postgres_public_network_access ? 1 : 0
+
   name             = "AllowClientDev"
   server_id        = azurerm_postgresql_flexible_server.dev.id
   start_ip_address = var.postgres_client_ip

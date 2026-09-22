@@ -44,11 +44,13 @@ Entra ID JWTs on `/v1/me`, `/v1/track`, `/v1/events` (`/health` public).
 See `docs/auth.md` for portal setup and the token flow.
 - App Service still uses **managed identity** → Key Vault for `DATABASE_URL`
 
-## Networking (Stage 3–4b)
-- **Postgres:** App Service via **Private Endpoint** (VNet); laptop via public firewall (your IP). TLS required.
-- **Key Vault:** App Service via **Private Endpoint**; laptop via Deny ACL + your IP. Apply Terraform from that IP.
-- **App Service:** **B1** + VNet integration (~£40/mo) — required for private DB/KV path.
-- Extra PE cost: ~£5–8/mo each (Postgres + Key Vault).
+## Networking (Stage 3–5)
+- **Postgres / Key Vault:** App Service via **Private Endpoints** (VNet).
+- **Laptop today:** public firewall / KV IP allow-list (your IP).
+- **Stage 5 (opt-in):** Point-to-Site VPN (`enable_vpn_gateway=true`), then
+  `postgres_public_network_access=false` to remove the public DB endpoint.
+- **App Service:** **B1** + VNet integration (~£40/mo).
+- **Costs:** PE ~£5–8 each; VPN Gateway VpnGw1 ~£25–35/mo if enabled.
 See `docs/networking.md`.
 
 ## App Insights (telemetry)

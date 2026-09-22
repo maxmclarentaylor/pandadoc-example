@@ -66,3 +66,27 @@ output "postgres_private_endpoint_name" {
 output "key_vault_private_endpoint_name" {
   value = azurerm_private_endpoint.key_vault.name
 }
+
+output "vpn_gateway_name" {
+  value = var.enable_vpn_gateway ? azurerm_virtual_network_gateway.vpn[0].name : null
+}
+
+output "vpn_public_ip" {
+  value = var.enable_vpn_gateway ? azurerm_public_ip.vpn[0].ip_address : null
+}
+
+# Write these to files locally, then build a .pfx (see docs/networking.md).
+output "vpn_ca_cert_pem" {
+  value     = var.enable_vpn_gateway ? tls_self_signed_cert.vpn_ca[0].cert_pem : null
+  sensitive = true
+}
+
+output "vpn_client_cert_pem" {
+  value     = var.enable_vpn_gateway ? tls_locally_signed_cert.vpn_client[0].cert_pem : null
+  sensitive = true
+}
+
+output "vpn_client_key_pem" {
+  value     = var.enable_vpn_gateway ? tls_private_key.vpn_client[0].private_key_pem : null
+  sensitive = true
+}
