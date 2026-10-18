@@ -1,36 +1,7 @@
+import type { Chunk } from './chunks/types'
+
 /** Resolves a Bearer access token (from AuthContext / useAuth). */
 export type GetAccessToken = () => Promise<string>
-
-export type TrackPayload = {
-  message_id: string
-  event: string
-  user_id?: string
-  anonymous_id?: string
-  properties?: Record<string, unknown>
-}
-
-export type EventRecord = {
-  message_id: string
-  anonymous_id: string | null
-  user_id: string | null
-  event: string
-  properties: Record<string, unknown>
-  event_timestamp: string
-  received_at: string
-}
-
-export type IdentifyPayload = {
-  user_id: string
-  anonymous_id?: string
-  traits?: Record<string, unknown>
-}
-
-export type ProfileRecord = {
-  user_id: string
-  anonymous_id: string | null
-  traits: Record<string, unknown>
-  updated_at: string
-}
 
 export type MeResponse = {
   oid: string | null
@@ -62,8 +33,8 @@ async function parseError(res: Response, fallback: string): Promise<never> {
 }
 
 /**
- * Dynamic authenticated GET.
- * @param endpoint e.g. `/v1/me` or `v1/events`
+ * Authenticated GET. Sends the Entra access token as a Bearer JWT.
+ * @param endpoint e.g. `/v1/me`
  * @param getAccessToken from `useAuth()`
  */
 export async function apiGet<T>(
@@ -85,8 +56,8 @@ export async function apiGet<T>(
 }
 
 /**
- * Dynamic authenticated POST.
- * @param endpoint e.g. `/v1/track`
+ * Authenticated POST. Sends the Entra access token as a Bearer JWT.
+ * @param endpoint path under the API
  * @param body JSON-serializable request body
  * @param getAccessToken from `useAuth()`
  */
@@ -110,37 +81,79 @@ export async function apiPost<T>(
   return res.json() as Promise<T>
 }
 
-/** Convenience wrappers — all go through apiGet / apiPost. */
+/**
+ * Authenticated PUT. Sends the Entra access token as a Bearer JWT.
+ * @param endpoint path under the API
+ * @param body JSON-serializable request body
+ * @param getAccessToken from `useAuth()`
+ */
+export async function apiPut<T>(
+  endpoint: string,
+  body: unknown,
+  getAccessToken: GetAccessToken,
+): Promise<T> {
+  const accessToken = await getAccessToken()
+  const res = await fetch(buildUrl(endpoint), {
+    method: 'PUT',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    await parseError(res, `PUT ${endpoint} failed`)
+  }
+  return res.json() as Promise<T>
+}
 
+/** Calls GET /v1/me so the API can verify the Entra JWT. */
 export function fetchMe(getAccessToken: GetAccessToken): Promise<MeResponse> {
   return apiGet<MeResponse>('/v1/me', getAccessToken)
 }
 
-export function listEvents(limit: number, getAccessToken: GetAccessToken): Promise<EventRecord[]> {
-  return apiGet<EventRecord[]>('/v1/events', getAccessToken, { limit })
+/** WebSocket base and room for one page. The provider appends the room to the base. */
+export function pageCollabUrl(pageId: string): { serverUrl: string; room: string } {
+  const serverUrl = API_BASE.replace(/^http/, 'ws')
+  return { serverUrl, room: `v1/pages/${pageId}/ws` }
 }
 
-export function trackEvent(
-  payload: TrackPayload,
-  getAccessToken: GetAccessToken,
-): Promise<{ status: string; message_id: string }> {
-  return apiPost<{ status: string; message_id: string }>('/v1/track', payload, getAccessToken)
+export type PageSummary = {
+  id: string
+  title: string
 }
 
-export function identifyUser(
-  payload: IdentifyPayload,
-  getAccessToken: GetAccessToken,
-): Promise<{ status: string; user_id: string; traits: Record<string, unknown> }> {
-  return apiPost<{ status: string; user_id: string; traits: Record<string, unknown> }>(
-    '/v1/identify',
-    payload,
-    getAccessToken,
-  )
+export type PageDocument = {
+  id: string
+  title: string
+  chunks: Chunk[]
 }
 
-export function listProfiles(
-  limit: number,
+export type PageWrite = {
+  title: string
+  chunks: Chunk[]
+}
+
+/** Names of pages saved for the signed-in user. Does not include chunks. */
+export function fetchPages(getAccessToken: GetAccessToken): Promise<PageSummary[]> {
+  return apiGet<PageSummary[]>('/v1/pages', getAccessToken)
+}
+
+/** One saved page, including its chunks. */
+export function fetchPage(pageId: string, getAccessToken: GetAccessToken): Promise<PageDocument> {
+  return apiGet<PageDocument>(`/v1/pages/${pageId}`, getAccessToken)
+}
+
+/** Creates a page. The API assigns the id. */
+export function createPage(body: PageWrite, getAccessToken: GetAccessToken): Promise<PageDocument> {
+  return apiPost<PageDocument>('/v1/pages', body, getAccessToken)
+}
+
+/** Replaces the title and chunks of an existing page. */
+export function updatePage(
+  pageId: string,
+  body: PageWrite,
   getAccessToken: GetAccessToken,
-): Promise<ProfileRecord[]> {
-  return apiGet<ProfileRecord[]>('/v1/profiles', getAccessToken, { limit })
+): Promise<PageDocument> {
+  return apiPut<PageDocument>(`/v1/pages/${pageId}`, body, getAccessToken)
 }

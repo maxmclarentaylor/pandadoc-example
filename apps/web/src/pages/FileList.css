@@ -1,0 +1,75 @@
+.file-list {
+  width: min(640px, 100%);
+  margin: 0 auto;
+  padding: 3rem 1.5rem 4rem;
+}
+
+.file-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.file-list-header h1 {
+  margin: 0;
+  color: #1c1c1c;
+  font-size: 1.6rem;
+  font-weight: 650;
+}
+
+.file-list-create,
+.file-list-item {
+  font: inherit;
+  cursor: pointer;
+}
+
+.file-list-create {
+  padding: 0.55rem 0.9rem;
+  border: 0;
+  border-radius: 8px;
+  background: #1f7a4d;
+  color: #fff;
+  font-weight: 600;
+}
+
+.file-list-create:hover,
+.file-list-create:active {
+  background: #18663f;
+}
+
+.file-list-status,
+.file-list-error {
+  margin: 0;
+  color: #71717a;
+}
+
+.file-list-error {
+  color: #9b2c2c;
+}
+
+.file-list-items {
+  list-style: none;
+  margin: 1rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.file-list-item {
+  display: block;
+  width: 100%;
+  padding: 0.9rem 1rem;
+  border: 1px solid #e6e8ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #1c1c1c;
+  text-align: left;
+  font-weight: 600;
+}
+
+.file-list-item:hover,
+.file-list-item:active {
+  background: #f8fafc;
+}

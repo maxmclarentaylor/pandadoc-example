@@ -11,8 +11,17 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^4.30.0",
+    "@dnd-kit/core": "^6.3.1",
+    "@dnd-kit/sortable": "^10.0.0",
+    "@dnd-kit/utilities": "^3.2.2",
+    "lucide-react": "^1.56.0",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-day-picker": "^10.0.2",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.4.0",
+    "react-signature-pad-wrapper": "^4.3.3",
+    "y-websocket": "^3.1.0",
+    "yjs": "^13.6.33"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",

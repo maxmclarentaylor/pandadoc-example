@@ -1,3 +1,82 @@
+.nav-switch {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
+}
+
+.artist-chart {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.35rem;
+}
+
+@media (min-width: 700px) {
+  .artist-chart {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+.artist-chart li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.55rem 0.7rem;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.artist-chart .rank {
+  min-width: 2rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.artist-chart .artist-name {
+  font-weight: 600;
+}
+
+.listener-layout {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 700px) {
+  .listener-layout {
+    grid-template-columns: 10rem 1fr;
+    align-items: start;
+  }
+}
+
+.listener-names {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.35rem;
+}
+
+button.artist {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 0.75rem;
+  text-align: left;
+  border-radius: 10px;
+  background: #fff;
+  color: var(--ink);
+  border: 1px solid var(--line);
+}
+
+button.artist.picked {
+  border-color: var(--accent);
+  background: #e7f5f0;
+}
+
 .page {
   width: min(1100px, calc(100% - 2rem));
   margin: 0 auto;
