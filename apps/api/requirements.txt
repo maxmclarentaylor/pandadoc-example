@@ -2,7 +2,11 @@ fastapi==0.116.1
 uvicorn[standard]==0.35.0
 psycopg[binary]==3.2.9
 SQLAlchemy==2.0.43
+alembic==1.16.5
 pydantic==2.11.7
 python-dotenv==1.1.1
 PyJWT[crypto]==2.10.1
 azure-monitor-opentelemetry==1.8.1
+httpx==0.28.1
+pycrdt==0.14.8
+pycrdt-websocket==0.16.5
