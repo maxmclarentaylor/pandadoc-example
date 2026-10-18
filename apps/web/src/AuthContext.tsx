@@ -68,7 +68,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [renewAccessToken])
 
   useEffect(() => {
-    void initMsal().then(async () => {
+    async function bootstrap() {
+      const redirectResult = await initMsal()
+      if (redirectResult?.account) {
+        setAccount(redirectResult.account)
+        accessTokenRef.current = redirectResult.accessToken
+        setAccessToken(redirectResult.accessToken)
+        try {
+          await renewAccessToken()
+        } catch {
+          // Redirect login often already returned a usable access token.
+        }
+        setReady(true)
+        return
+      }
+
       const existing = getAccount()
       setAccount(existing)
       if (existing) {
@@ -79,7 +93,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       }
       setReady(true)
-    })
+    }
+
+    void bootstrap()
   }, [clearSession, renewAccessToken])
 
   // Proactive silent refresh while signed in
@@ -98,19 +114,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [account, renewAccessToken])
 
   const login = useCallback(async () => {
-    const result = await msalLogin()
-    setAccount(result.account)
-    accessTokenRef.current = result.accessToken
-    setAccessToken(result.accessToken)
-    // Ensure we have a fresh API-scoped token in cache/context
-    await renewAccessToken().catch(() => {
-      // loginPopup often already returned a usable access token
-    })
-  }, [renewAccessToken])
+    // Navigates this tab to Entra. Session is restored on return via handleRedirectPromise.
+    await msalLogin()
+  }, [])
 
   const logout = useCallback(async () => {
-    await msalLogout()
+    // Navigates this tab to Entra logout. clearSession runs if the page stays up.
     clearSession()
+    await msalLogout()
   }, [clearSession])
 
   const value = useMemo<AuthContextValue>(
