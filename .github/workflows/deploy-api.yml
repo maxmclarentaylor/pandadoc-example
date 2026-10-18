@@ -54,7 +54,7 @@ jobs:
             "https://${APP_NAME}.scm.azurewebsites.net/api/command" \
             -u "${USER}:${PASS}" \
             -H "Content-Type: application/json" \
-            -d '{"command":"python -m alembic upgrade head","dir":"/home/site/wwwroot"}')
+            -d '{"command":"/home/site/wwwroot/antenv/bin/python -m alembic upgrade head","dir":"/home/site/wwwroot"}')
 
           echo "$RESP"
           EXIT=$(echo "$RESP" | python3 -c "import sys, json; print(json.load(sys.stdin).get('ExitCode', 1))")
