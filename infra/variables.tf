@@ -30,7 +30,7 @@ variable "entra_api_client_id" {
 
 variable "enable_vpn_gateway" {
   type        = bool
-  description = "Stage 5: create Point-to-Site VPN Gateway (VpnGw1, ~£25–35/mo). Needed before turning off Postgres public access."
+  description = "Stage 5: create Point-to-Site VPN Gateway (VpnGw1AZ, ~£25–40/mo). Needed before turning off Postgres public access."
   default     = false
 }
 
