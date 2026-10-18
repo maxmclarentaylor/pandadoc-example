@@ -26,10 +26,7 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background:
-    radial-gradient(1200px 500px at 10% -10%, #d7ebe4 0%, transparent 55%),
-    radial-gradient(900px 420px at 100% 0%, #d5e3f0 0%, transparent 50%),
-    linear-gradient(180deg, var(--bg1), var(--bg0));
+  background: #eceff3;
 }
 
 button,
