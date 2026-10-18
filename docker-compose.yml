@@ -1,0 +1,59 @@
+# Local Docker Compose — API runtime aligned with Azure (Python 3.12 + uvicorn).
+# The API container uses apps/api/.env, the same Azure DATABASE_URL as the host venv.
+# Web stays on the host: cd apps/web && npm run dev
+#
+# Quick start:
+#   docker compose up --build
+#   docker compose run --rm api alembic upgrade head
+#
+# The db service is only for local pytest (segment_test). API calls do not use it.
+
+name: segment-practice
+
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: segment
+      POSTGRES_PASSWORD: segment
+      POSTGRES_DB: segment
+    ports:
+      - "5432:5432"
+    volumes:
+      - segment_pg_data:/var/lib/postgresql/data
+      # Creates `segment_test` on first volume init (dedicated pytest database).
+      - ./apps/api/docker/init-databases.sql:/docker-entrypoint-initdb.d/10-init-databases.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U segment -d segment"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ./apps/api/.env
+    environment:
+      ALLOWED_ORIGINS: http://localhost:5173,http://127.0.0.1:5173
+    volumes:
+      # Live code reload while developing (deps stay in the image).
+      - ./apps/api:/app
+    command:
+      [
+        "python",
+        "-m",
+        "uvicorn",
+        "app.main:app",
+        "--host",
+        "0.0.0.0",
+        "--port",
+        "8000",
+        "--reload",
+      ]
+
+volumes:
+  segment_pg_data:

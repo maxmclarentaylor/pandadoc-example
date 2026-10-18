@@ -50,7 +50,7 @@ See `docs/auth.md` for portal setup and the token flow.
 - **Stage 5 (opt-in):** Point-to-Site VPN (`enable_vpn_gateway=true`), then
   `postgres_public_network_access=false` to remove the public DB endpoint.
 - **App Service:** **B1** + VNet integration (~£40/mo).
-- **Costs:** PE ~£5–8 each; VPN Gateway VpnGw1 ~£25–35/mo if enabled.
+- **Costs:** PE ~£5–8 each; VPN Gateway VpnGw1AZ ~£25–40/mo if enabled.
 See `docs/networking.md`.
 
 ## App Insights (telemetry)

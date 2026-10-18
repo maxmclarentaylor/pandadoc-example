@@ -12,14 +12,20 @@ Personal replica of Segment (event ingest/routing) + Mixpanel (storage/analytics
 - `apps/api/` — Python FastAPI (`/v1/track`, `/v1/events`)
 - `apps/web/` — React event console
 - `.github/workflows/` — GitHub Actions → Azure
+- `docker-compose.yml` — local API + Postgres (Python 3.12, closer to App Service)
 
 ## Local run
 ```bash
-# API
+# API (venv)
 cd apps/api && source .venv/bin/activate
 uvicorn app.main:app --reload --port 8000
 
-# UI (separate terminal)
+# API (Docker — Python 3.12 + local Postgres)
+cp apps/api/.env.docker.example apps/api/.env.docker
+docker compose up --build
+docker compose run --rm api alembic upgrade head
+
+# UI (separate terminal; still on the host)
 cd apps/web && npm run dev
 ```
 

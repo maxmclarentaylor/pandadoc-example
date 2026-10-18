@@ -1,8 +1,9 @@
 name: Deploy API
 
 on:
+  # Runs after a push to dev (and on manual dispatch).
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - "apps/api/**"
       - ".github/workflows/deploy-api.yml"
@@ -33,3 +34,28 @@ jobs:
         with:
           app-name: ${{ vars.AZURE_API_WEBAPP_NAME }}
           package: apps/api
+
+      # Run on App Service (VNet + PE + Key Vault refs). GitHub runners cannot reach private Postgres.
+      - name: Run Alembic migrations
+        env:
+          APP_NAME: ${{ vars.AZURE_API_WEBAPP_NAME }}
+          RESOURCE_GROUP: segment-practice-dev-rg
+        working-directory: .
+        run: |
+          set -euo pipefail
+          USER=$(az webapp deployment list-publishing-credentials \
+            -g "$RESOURCE_GROUP" -n "$APP_NAME" \
+            --query publishingUserName -o tsv)
+          PASS=$(az webapp deployment list-publishing-credentials \
+            -g "$RESOURCE_GROUP" -n "$APP_NAME" \
+            --query publishingPassword -o tsv)
+
+          RESP=$(curl -sS -X POST \
+            "https://${APP_NAME}.scm.azurewebsites.net/api/command" \
+            -u "${USER}:${PASS}" \
+            -H "Content-Type: application/json" \
+            -d '{"command":"python -m alembic upgrade head","dir":"/home/site/wwwroot"}')
+
+          echo "$RESP"
+          EXIT=$(echo "$RESP" | python3 -c "import sys, json; print(json.load(sys.stdin).get('ExitCode', 1))")
+          test "$EXIT" = "0"
