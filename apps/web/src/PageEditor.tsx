@@ -2,7 +2,14 @@ import { useEffect, useRef, useState, type FocusEvent } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
-import { createPage, pageCollabUrl } from './api'
+import {
+  createPage,
+  fetchPage,
+  lockPage,
+  pageCollabUrl,
+  unlockPage,
+  verifyPageIntegrity,
+} from './api'
 import { useAuth } from './AuthContext'
 import {
   DndContext,
@@ -32,7 +39,7 @@ import TableBlock from './chunks/TableBlock'
 import TextBlock from './chunks/TextBlock'
 import VideoBlock from './chunks/VideoBlock'
 import type { Chunk, ChunkChange, ChunkType } from './chunks/types'
-import { LOCAL, readPage, writePage } from './collabDoc'
+import { LOCAL, readPage, writeLocked, writePage } from './collabDoc'
 import { STARTING_CHUNKS } from './pages/salesContract'
 import './PageEditor.css'
 
@@ -60,8 +67,13 @@ export default function PageEditor() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [live, setLive] = useState(false)
+  const [locked, setLocked] = useState(false)
+  const [contentHash, setContentHash] = useState<string | null>(null)
+  const [lockBusy, setLockBusy] = useState(false)
+  const [integrity, setIntegrity] = useState<'idle' | 'checking' | 'ok' | 'mismatch' | 'error'>('idle')
   const docRef = useRef<Y.Doc | null>(null)
   const remoteEdit = useRef(false)
+  const lockedRef = useRef(false)
   const [pickerAfterId, setPickerAfterId] = useState<string | null>(null)
   const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null)
   const [cogMenuId, setCogMenuId] = useState<string | null>(null)
@@ -71,9 +83,16 @@ export default function PageEditor() {
   )
 
   useEffect(() => {
+    lockedRef.current = locked
+  }, [locked])
+
+  useEffect(() => {
     if (!pageId) {
       setTitle(DEFAULT_TITLE)
       setChunks(STARTING_CHUNKS)
+      setLocked(false)
+      setContentHash(null)
+      setIntegrity('idle')
       setLoadError(null)
       setReady(true)
       setLive(false)
@@ -85,6 +104,9 @@ export default function PageEditor() {
     docRef.current = doc
     setReady(false)
     setLive(false)
+    setLocked(false)
+    setContentHash(null)
+    setIntegrity('idle')
     setLoadError(null)
 
     const id = pageId
@@ -98,6 +120,12 @@ export default function PageEditor() {
       remoteEdit.current = true
       setTitle(page.title)
       setChunks(page.chunks)
+      if (lockedRef.current && !page.locked) {
+        writeLocked(doc, true)
+        setLocked(true)
+      } else {
+        setLocked(page.locked)
+      }
       setReady(true)
       setLive(true)
     }
@@ -114,6 +142,18 @@ export default function PageEditor() {
       if (cancel) {
         return
       }
+      // Postgres is source of truth for lock; Yjs keeps collaborators in sync.
+      try {
+        const saved = await fetchPage(id, getAccessToken)
+        if (!cancel) {
+          lockedRef.current = saved.locked
+          setLocked(saved.locked)
+          setContentHash(saved.content_hash)
+          setIntegrity('idle')
+        }
+      } catch {
+        // Collab can still open; lock UI falls back to Yjs meta.
+      }
       const { serverUrl, room } = pageCollabUrl(id)
       provider = new WebsocketProvider(serverUrl, room, doc, {
         connect: true,
@@ -123,6 +163,9 @@ export default function PageEditor() {
       provider.on('sync', (synced: boolean) => {
         if (synced) {
           publish()
+          if (lockedRef.current) {
+            writeLocked(doc, true)
+          }
         }
       })
       provider.on('connection-close', (event: CloseEvent | null) => {
@@ -155,7 +198,7 @@ export default function PageEditor() {
   }, [pageId, getAccessToken])
 
   useEffect(() => {
-    if (!live) {
+    if (!live || locked) {
       return
     }
     const doc = docRef.current
@@ -167,10 +210,66 @@ export default function PageEditor() {
       return
     }
     writePage(doc, title, chunks)
-  }, [live, title, chunks])
+  }, [live, locked, title, chunks])
+
+  async function setPageLocked(next: boolean) {
+    setCogMenuId(null)
+    setSelectedChunkId(null)
+    setPickerAfterId(null)
+    setSaveError(null)
+    setIntegrity('idle')
+
+    if (!pageId) {
+      setSaveError('Save the page before locking so the hash can be stored in the database.')
+      return
+    }
+
+    setLockBusy(true)
+    try {
+      if (next) {
+        const lockedPage = await lockPage(
+          pageId,
+          { title: title.trim() || DEFAULT_TITLE, chunks },
+          getAccessToken,
+        )
+        lockedRef.current = true
+        setLocked(true)
+        setContentHash(lockedPage.content_hash)
+      } else {
+        await unlockPage(pageId, getAccessToken)
+        lockedRef.current = false
+        setLocked(false)
+        setContentHash(null)
+      }
+      const doc = docRef.current
+      if (live && doc) {
+        writeLocked(doc, next)
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : next ? 'Could not lock page' : 'Could not unlock page')
+    } finally {
+      setLockBusy(false)
+    }
+  }
+
+  async function checkIntegrity() {
+    if (!pageId) {
+      return
+    }
+    setIntegrity('checking')
+    setSaveError(null)
+    try {
+      const result = await verifyPageIntegrity(pageId, getAccessToken)
+      setContentHash(result.content_hash)
+      setIntegrity(result.matches ? 'ok' : 'mismatch')
+    } catch (err) {
+      setIntegrity('error')
+      setSaveError(err instanceof Error ? err.message : 'Could not verify page integrity')
+    }
+  }
 
   async function savePage() {
-    if (pageId) {
+    if (pageId || locked) {
       return
     }
     setSaving(true)
@@ -188,6 +287,9 @@ export default function PageEditor() {
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    if (locked) {
+      return
+    }
     const { active, over } = event
     if (!over || active.id === over.id) {
       return
@@ -217,14 +319,23 @@ export default function PageEditor() {
   }
 
   function updateChunk(next: Chunk) {
+    if (locked) {
+      return
+    }
     setChunks((current) => current.map((chunk) => (chunk.id === next.id ? next : chunk)))
   }
 
   function togglePicker(afterId: string) {
+    if (locked) {
+      return
+    }
     setPickerAfterId((current) => (current === afterId ? null : afterId))
   }
 
   function addChunk(type: ChunkType) {
+    if (locked) {
+      return
+    }
     setChunks((current) => {
       const added = [...current, blankChunk(type)]
       if (!pickerAfterId || pickerAfterId === PAGE_END) {
@@ -240,6 +351,9 @@ export default function PageEditor() {
   }
 
   function selectChunk(id: string | null) {
+    if (locked) {
+      return
+    }
     setSelectedChunkId(id)
     if (id === null) {
       setCogMenuId(null)
@@ -247,6 +361,9 @@ export default function PageEditor() {
   }
 
   function deleteChunk(id: string) {
+    if (locked) {
+      return
+    }
     setChunks((current) => current.filter((chunk) => chunk.id !== id))
     setSelectedChunkId(null)
     setCogMenuId(null)
@@ -274,7 +391,7 @@ export default function PageEditor() {
   }, [pickerAfterId, cogMenuId])
 
   return (
-    <div className="workspace">
+    <div className={locked ? 'workspace workspace-locked' : 'workspace'}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="editor-shell">
           <div className="editor-main">
@@ -286,24 +403,80 @@ export default function PageEditor() {
                 className="page-title"
                 aria-label="Page title"
                 value={title}
-                disabled={Boolean(pageId) && !ready}
+                disabled={locked || (Boolean(pageId) && !ready)}
                 onChange={(event) => setTitle(event.target.value)}
               />
+              {locked ? (
+                <button
+                  type="button"
+                  className="page-unlock"
+                  onClick={() => void setPageLocked(false)}
+                  disabled={lockBusy}
+                >
+                  {lockBusy ? 'Unlocking…' : 'Unlock'}
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className="page-lock"
+                  onClick={() => void setPageLocked(true)}
+                  disabled={lockBusy || !pageId || !ready}
+                  title={pageId ? undefined : 'Save the page before locking'}
+                >
+                  {lockBusy ? 'Locking…' : 'Lock'}
+                </button>
+              )}
               <button
                 type="button"
                 className="page-save"
                 onClick={() => void savePage()}
-                disabled={!ready || saving || Boolean(pageId)}
+                disabled={locked || !ready || saving || Boolean(pageId)}
               >
                 {pageId ? (live ? 'Live' : 'Connecting') : saving ? 'Saving' : 'Save'}
               </button>
             </div>
+            {locked ? (
+              <div className="page-lock-banner" role="status">
+                <p>
+                  This page is locked. Anyone can view it, but it can’t be edited until someone unlocks it.
+                </p>
+                {contentHash ? (
+                  <p className="page-lock-hash">
+                    <span className="page-lock-hash-label">SHA-256</span>
+                    <code>{contentHash}</code>
+                  </p>
+                ) : null}
+                <div className="page-lock-actions">
+                  <button
+                    type="button"
+                    className="page-verify"
+                    onClick={() => void checkIntegrity()}
+                    disabled={!pageId || integrity === 'checking'}
+                  >
+                    {integrity === 'checking' ? 'Verifying…' : 'Verify integrity'}
+                  </button>
+                  {integrity === 'ok' ? (
+                    <span className="page-integrity page-integrity-ok">Snapshot matches the stored hash</span>
+                  ) : null}
+                  {integrity === 'mismatch' ? (
+                    <span className="page-integrity page-integrity-bad">
+                      Snapshot does not match the stored hash
+                    </span>
+                  ) : null}
+                  {integrity === 'error' ? (
+                    <span className="page-integrity page-integrity-bad">Verification failed</span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             {loadError ? <p className="page-message page-message-error">{loadError}</p> : null}
             {pageId && !ready && !loadError ? <p className="page-message">Connecting…</p> : null}
             {saveError ? <p className="page-message page-message-error">{saveError}</p> : null}
             {!pageId || ready ? (
               <>
-            <p className="workspace-note">Drag a block by its handle, or drag Text field onto a block.</p>
+            {locked ? null : (
+              <p className="workspace-note">Drag a block by its handle, or drag Text field onto a block.</p>
+            )}
             <article className="doc-page">
               <SortableContext items={chunks.map((chunk) => chunk.id)} strategy={verticalListSortingStrategy}>
                 <ul className="chunk-list">
@@ -311,9 +484,10 @@ export default function PageEditor() {
                     <ChunkBlock
                       key={chunk.id}
                       chunk={chunk}
-                      selected={selectedChunkId === chunk.id}
-                      menuOpen={cogMenuId === chunk.id}
-                      addOpen={pickerAfterId === chunk.id}
+                      readOnly={locked}
+                      selected={!locked && selectedChunkId === chunk.id}
+                      menuOpen={!locked && cogMenuId === chunk.id}
+                      addOpen={!locked && pickerAfterId === chunk.id}
                       onChange={updateChunk}
                       onSelect={selectChunk}
                       onToggleMenu={() => setCogMenuId((current) => (current === chunk.id ? null : chunk.id))}
@@ -325,24 +499,28 @@ export default function PageEditor() {
                   ))}
                 </ul>
               </SortableContext>
-              <AddChunkButton
-                open={pickerAfterId === PAGE_END}
-                onToggle={() => togglePicker(PAGE_END)}
-                onAdd={addChunk}
-                onClose={() => setPickerAfterId(null)}
-              />
+              {locked ? null : (
+                <AddChunkButton
+                  open={pickerAfterId === PAGE_END}
+                  onToggle={() => togglePicker(PAGE_END)}
+                  onAdd={addChunk}
+                  onClose={() => setPickerAfterId(null)}
+                />
+              )}
             </article>
               </>
             ) : null}
           </div>
-          <aside className="field-rail">
-            <h2>Add fillable fields</h2>
-            <div className="field-list">
-              <PaletteChip id={NEW_TEXT_FIELD_ID} label="Text field" icon={Type} />
-              <PaletteChip id={NEW_SIGNATURE_ID} label="Signature" icon={PenLine} />
-              <PaletteChip id={NEW_DATE_ID} label="Date" icon={Calendar} />
-            </div>
-          </aside>
+          {locked ? null : (
+            <aside className="field-rail">
+              <h2>Add fillable fields</h2>
+              <div className="field-list">
+                <PaletteChip id={NEW_TEXT_FIELD_ID} label="Text field" icon={Type} />
+                <PaletteChip id={NEW_SIGNATURE_ID} label="Signature" icon={PenLine} />
+                <PaletteChip id={NEW_DATE_ID} label="Date" icon={Calendar} />
+              </div>
+            </aside>
+          )}
         </div>
       </DndContext>
     </div>
@@ -379,6 +557,7 @@ function blankChunk(type: ChunkType): Chunk {
 
 type ChunkBlockProps = {
   chunk: Chunk
+  readOnly: boolean
   selected: boolean
   menuOpen: boolean
   addOpen: boolean
@@ -393,6 +572,7 @@ type ChunkBlockProps = {
 
 function ChunkBlock({
   chunk,
+  readOnly,
   selected,
   menuOpen,
   addOpen,
@@ -405,7 +585,7 @@ function ChunkBlock({
   onCloseAdd,
 }: ChunkBlockProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: chunk.id })
+    useSortable({ id: chunk.id, disabled: readOnly })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -429,26 +609,38 @@ function ChunkBlock({
       onFocus={() => onSelect(chunk.id)}
       onBlur={handleBlur}
     >
-      <button
-        type="button"
-        className="chunk-handle"
-        aria-label="Drag to reorder"
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-      >
-        ::
-      </button>
+      {readOnly ? null : (
+        <button
+          type="button"
+          className="chunk-handle"
+          aria-label="Drag to reorder"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+        >
+          ::
+        </button>
+      )}
       <div className="chunk-body" tabIndex={-1}>
-        {chunk.type === 'text' ? <TextBlock chunk={chunk} onChange={onChange} /> : null}
-        {chunk.type === 'image' ? <ImageBlock chunk={chunk} onChange={onChange} /> : null}
-        {chunk.type === 'video' ? <VideoBlock chunk={chunk} onChange={onChange} /> : null}
-        {chunk.type === 'table' ? <TableBlock chunk={chunk} onChange={onChange} /> : null}
+        {chunk.type === 'text' ? <TextBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
+        {chunk.type === 'image' ? <ImageBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
+        {chunk.type === 'video' ? <VideoBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
+        {chunk.type === 'table' ? <TableBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
         {chunk.type === 'signature' ? (
-          <SignatureBlock chunk={chunk} onChange={onChange} onPress={() => onSelect(chunk.id)} />
+          <SignatureBlock
+            chunk={chunk}
+            onChange={onChange}
+            onPress={() => onSelect(chunk.id)}
+            readOnly={readOnly}
+          />
         ) : null}
         {chunk.type === 'date' ? (
-          <DateBlock chunk={chunk} onChange={onChange} onPress={() => onSelect(chunk.id)} />
+          <DateBlock
+            chunk={chunk}
+            onChange={onChange}
+            onPress={() => onSelect(chunk.id)}
+            readOnly={readOnly}
+          />
         ) : null}
         {selected ? (
           <button type="button" className="chunk-cog" aria-label="Block settings" aria-expanded={menuOpen} onClick={onToggleMenu}>
@@ -457,12 +649,14 @@ function ChunkBlock({
         ) : null}
         {menuOpen ? <BlockMenu onDelete={onDelete} /> : null}
       </div>
-      <AddChunkButton
-        open={addOpen}
-        onToggle={onToggleAdd}
-        onAdd={onAdd}
-        onClose={onCloseAdd}
-      />
+      {readOnly ? null : (
+        <AddChunkButton
+          open={addOpen}
+          onToggle={onToggleAdd}
+          onAdd={onAdd}
+          onClose={onCloseAdd}
+        />
+      )}
     </li>
   )
 }

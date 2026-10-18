@@ -19,9 +19,22 @@ class PageWrite(BaseModel):
 class PageSummary(BaseModel):
     id: str
     title: str
+    locked: bool = False
 
 
 class PageOut(BaseModel):
     id: str
     title: str
     chunks: list[dict[str, Any]]
+    locked: bool = False
+    content_hash: str | None = None
+
+
+class PageIntegrityOut(BaseModel):
+    """Re-hash the frozen snapshot and compare to the stored fingerprint."""
+
+    id: str
+    locked: bool
+    content_hash: str | None
+    computed_hash: str
+    matches: bool

@@ -62,6 +62,108 @@
   cursor: not-allowed;
 }
 
+.page-lock,
+.page-unlock {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 8px;
+  background: #fff;
+  color: #3f3f46;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.page-lock:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.page-lock-banner {
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #52525b;
+  font-size: 0.9rem;
+}
+
+.page-lock-banner > p {
+  margin: 0;
+}
+
+.page-lock-hash {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45rem 0.65rem;
+  margin-top: 0.55rem;
+}
+
+.page-lock-hash-label {
+  flex: none;
+  color: #71717a;
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.page-lock-hash code {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.72rem;
+  color: #3f3f46;
+}
+
+.page-lock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.55rem 0.75rem;
+  margin-top: 0.65rem;
+}
+
+.page-verify {
+  padding: 0.35rem 0.7rem;
+  border: 1px solid #d4d4d8;
+  border-radius: 6px;
+  background: #fff;
+  color: #3f3f46;
+  font: inherit;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.page-verify:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.page-integrity {
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.page-integrity-ok {
+  color: #166534;
+}
+
+.page-integrity-bad {
+  color: #9b2c2c;
+}
+
+.workspace-locked .doc-page {
+  box-shadow: none;
+}
+
+.workspace-locked .chunk-body textarea,
+.workspace-locked .chunk-table input {
+  cursor: default;
+}
+
 .page-message {
   margin: 0 0 0.75rem;
   color: #71717a;

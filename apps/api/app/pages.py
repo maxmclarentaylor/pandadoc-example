@@ -15,7 +15,8 @@ from sqlalchemy.orm import Session
 from app.auth import decode_entra_token, require_entra_user
 from app.db import SessionLocal, get_db
 from app.models import Page
-from app.schemas import PageOut, PageSummary, PageWrite
+from app.page_integrity import content_hash
+from app.schemas import PageIntegrityOut, PageOut, PageSummary, PageWrite
 
 log = logging.getLogger(__name__)
 
@@ -52,37 +53,51 @@ def _y_state(title: str, chunks: list[dict[str, Any]]) -> bytes | None:
     return encode_page(title, chunks)
 
 
-def _get_owned_page(db: Session, page_id: str, owner_oid: str) -> Page:
-    page = db.scalar(select(Page).where(Page.id == page_id, Page.owner_oid == owner_oid))
+def _get_page(db: Session, page_id: str) -> Page:
+    """Any signed-in user can open any page (temporary shared access)."""
+    page = db.scalar(select(Page).where(Page.id == page_id))
     if page is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found")
     return page
 
 
 def _to_out(page: Page) -> PageOut:
-    return PageOut(id=page.id, title=page.title, chunks=page.chunks)
+    return PageOut(
+        id=page.id,
+        title=page.title,
+        chunks=page.chunks,
+        locked=page.locked,
+        content_hash=page.content_hash,
+    )
+
+
+def _require_unlocked(page: Page) -> None:
+    if page.locked:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Page is locked and cannot be edited",
+        )
 
 
 @router.get("", response_model=list[PageSummary])
 def list_pages(
-    claims: dict[str, Any] = Depends(require_entra_user),
+    _claims: dict[str, Any] = Depends(require_entra_user),
     db: Session = Depends(get_db),
 ) -> list[PageSummary]:
-    owner_oid = _owner_oid(claims)
-    rows = db.scalars(
-        select(Page).where(Page.owner_oid == owner_oid).order_by(Page.updated_at.desc())
-    )
-    return [PageSummary(id=page.id, title=page.title) for page in rows]
+    # Temporary: any signed-in user sees every page (owner filter restored later).
+    rows = db.scalars(select(Page).order_by(Page.updated_at.desc()))
+    return [
+        PageSummary(id=page.id, title=page.title, locked=page.locked) for page in rows
+    ]
 
 
 @router.get("/{page_id}", response_model=PageOut)
 def get_page(
     page_id: str,
-    claims: dict[str, Any] = Depends(require_entra_user),
+    _claims: dict[str, Any] = Depends(require_entra_user),
     db: Session = Depends(get_db),
 ) -> PageOut:
-    page = _get_owned_page(db, page_id, _owner_oid(claims))
-    return _to_out(page)
+    return _to_out(_get_page(db, page_id))
 
 
 @router.post("", response_model=PageOut, status_code=status.HTTP_201_CREATED)
@@ -99,6 +114,8 @@ def create_page(
         title=title,
         chunks=chunks,
         y_state=_y_state(title, chunks),
+        locked=False,
+        content_hash=None,
     )
     db.add(page)
     db.commit()
@@ -110,10 +127,11 @@ def create_page(
 def update_page(
     page_id: str,
     body: PageWrite,
-    claims: dict[str, Any] = Depends(require_entra_user),
+    _claims: dict[str, Any] = Depends(require_entra_user),
     db: Session = Depends(get_db),
 ) -> PageOut:
-    page = _get_owned_page(db, page_id, _owner_oid(claims))
+    page = _get_page(db, page_id)
+    _require_unlocked(page)
     page.title = _title(body.title)
     page.chunks = _chunks(body)
     page.y_state = _y_state(page.title, page.chunks)
@@ -121,6 +139,66 @@ def update_page(
     db.commit()
     db.refresh(page)
     return _to_out(page)
+
+
+@router.post("/{page_id}/lock", response_model=PageOut)
+def lock_page(
+    page_id: str,
+    body: PageWrite | None = None,
+    _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> PageOut:
+    """Freeze the current snapshot and store its SHA-256 fingerprint."""
+    page = _get_page(db, page_id)
+    if page.locked:
+        return _to_out(page)
+    # Prefer the editor's latest title/chunks so the hash matches what the user sees.
+    if body is not None:
+        page.title = _title(body.title)
+        page.chunks = _chunks(body)
+        page.y_state = _y_state(page.title, page.chunks)
+    page.locked = True
+    page.content_hash = content_hash(page.title, list(page.chunks))
+    page.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(page)
+    return _to_out(page)
+
+
+@router.post("/{page_id}/unlock", response_model=PageOut)
+def unlock_page(
+    page_id: str,
+    _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> PageOut:
+    page = _get_page(db, page_id)
+    if not page.locked:
+        return _to_out(page)
+    page.locked = False
+    page.content_hash = None
+    page.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(page)
+    return _to_out(page)
+
+
+@router.get("/{page_id}/integrity", response_model=PageIntegrityOut)
+def verify_page_integrity(
+    page_id: str,
+    _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> PageIntegrityOut:
+    """Recompute SHA-256 of the stored snapshot and compare to content_hash."""
+    page = _get_page(db, page_id)
+    computed = content_hash(page.title, list(page.chunks))
+    stored = page.content_hash
+    return PageIntegrityOut(
+        id=page.id,
+        locked=page.locked,
+        content_hash=stored,
+        computed_hash=computed,
+        matches=bool(stored) and stored == computed,
+    )
 
 
 class _Socket:
@@ -161,7 +239,7 @@ async def page_collab(
     """Sync one page. The token is the same Entra access token used on the REST routes."""
     try:
         claims = decode_entra_token(token)
-        owner_oid = _owner_oid(claims)
+        _owner_oid(claims)
     except HTTPException:
         await websocket.accept()
         await websocket.close(code=1008)
@@ -169,7 +247,8 @@ async def page_collab(
 
     db = SessionLocal()
     try:
-        page = db.scalar(select(Page).where(Page.id == page_id, Page.owner_oid == owner_oid))
+        # Temporary: any signed-in user can join any page's collab room.
+        page = db.scalar(select(Page).where(Page.id == page_id))
         if page is None:
             await websocket.accept()
             await websocket.close(code=1008)

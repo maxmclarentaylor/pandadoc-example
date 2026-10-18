@@ -121,12 +121,15 @@ export function pageCollabUrl(pageId: string): { serverUrl: string; room: string
 export type PageSummary = {
   id: string
   title: string
+  locked?: boolean
 }
 
 export type PageDocument = {
   id: string
   title: string
   chunks: Chunk[]
+  locked: boolean
+  content_hash: string | null
 }
 
 export type PageWrite = {
@@ -156,4 +159,34 @@ export function updatePage(
   getAccessToken: GetAccessToken,
 ): Promise<PageDocument> {
   return apiPut<PageDocument>(`/v1/pages/${pageId}`, body, getAccessToken)
+}
+
+/** Freeze the page snapshot in Postgres and store its content hash. */
+export function lockPage(
+  pageId: string,
+  body: PageWrite,
+  getAccessToken: GetAccessToken,
+): Promise<PageDocument> {
+  return apiPost<PageDocument>(`/v1/pages/${pageId}/lock`, body, getAccessToken)
+}
+
+/** Clear the Postgres lock so the page can be edited again. */
+export function unlockPage(pageId: string, getAccessToken: GetAccessToken): Promise<PageDocument> {
+  return apiPost<PageDocument>(`/v1/pages/${pageId}/unlock`, {}, getAccessToken)
+}
+
+export type PageIntegrity = {
+  id: string
+  locked: boolean
+  content_hash: string | null
+  computed_hash: string
+  matches: boolean
+}
+
+/** Re-hash the stored snapshot and compare it to content_hash. */
+export function verifyPageIntegrity(
+  pageId: string,
+  getAccessToken: GetAccessToken,
+): Promise<PageIntegrity> {
+  return apiGet<PageIntegrity>(`/v1/pages/${pageId}/integrity`, getAccessToken)
 }
