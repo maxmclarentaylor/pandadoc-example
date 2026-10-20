@@ -19,10 +19,39 @@
   font-weight: 650;
 }
 
+.file-list-heading {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.file-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
 .file-list-create,
+.file-list-secondary,
+.file-list-nav,
 .file-list-item {
   font: inherit;
   cursor: pointer;
+}
+
+.file-list-nav,
+.file-list-secondary {
+  padding: 0.55rem 0.9rem;
+  border: 1px solid #e6e8ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #3f3f46;
+  font-weight: 600;
+}
+
+.file-list-nav {
+  width: fit-content;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
 }
 
 .file-list-create {
@@ -57,9 +86,16 @@
   gap: 0.55rem;
 }
 
+.file-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
 .file-list-item {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   padding: 0.9rem 1rem;
   border: 1px solid #e6e8ec;
   border-radius: 8px;
@@ -72,4 +108,27 @@
 .file-list-item:hover,
 .file-list-item:active {
   background: #f8fafc;
+}
+
+.file-list-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.75rem;
+  border: 1px solid #e6e8ec;
+  border-radius: 8px;
+  background: #fff;
+  color: #9b2c2c;
+  cursor: pointer;
+}
+
+.file-list-delete:hover:not(:disabled),
+.file-list-delete:active:not(:disabled) {
+  background: #fef2f2;
+}
+
+.file-list-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }

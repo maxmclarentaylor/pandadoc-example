@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
-import { fetchMe, fetchPages, type PageSummary } from '../api'
+import { Trash2 } from 'lucide-react'
+import { deletePage, fetchMe, fetchPages, type PageSummary } from '../api'
 import { useAuth } from '../AuthContext'
 import './FileList.css'
 
@@ -10,6 +11,7 @@ export default function FileList() {
   const [pages, setPages] = useState<PageSummary[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!ready) {
@@ -47,13 +49,31 @@ export default function FileList() {
     }
   }, [ready, account, login, getAccessToken])
 
+  async function handleDelete(page: PageSummary) {
+    setDeletingId(page.id)
+    setError(null)
+    try {
+      await deletePage(page.id, getAccessToken)
+      setPages((current) => current.filter((item) => item.id !== page.id))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Could not delete page')
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
   return (
     <main className="file-list">
       <header className="file-list-header">
         <h1>Pages</h1>
-        <button type="button" className="file-list-create" onClick={() => navigate('/pages/new')}>
-          New page
-        </button>
+        <div className="file-list-actions">
+          <button type="button" className="file-list-secondary" onClick={() => navigate('/pages-to-sign')}>
+            Pages to sign
+          </button>
+          <button type="button" className="file-list-create" onClick={() => navigate('/pages/new')}>
+            New page
+          </button>
+        </div>
       </header>
       {loading ? <p className="file-list-status">Loading pages…</p> : null}
       {error ? (
@@ -67,9 +87,18 @@ export default function FileList() {
       {pages.length > 0 ? (
         <ul className="file-list-items">
           {pages.map((page) => (
-            <li key={page.id}>
+            <li key={page.id} className="file-list-row">
               <button type="button" className="file-list-item" onClick={() => navigate(`/pages/${page.id}`)}>
                 {page.title}
+              </button>
+              <button
+                type="button"
+                className="file-list-delete"
+                aria-label={`Delete ${page.title}`}
+                disabled={deletingId === page.id}
+                onClick={() => void handleDelete(page)}
+              >
+                <Trash2 aria-hidden strokeWidth={1.75} size={18} />
               </button>
             </li>
           ))}

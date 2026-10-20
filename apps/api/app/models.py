@@ -3,9 +3,9 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import Boolean, DateTime, LargeBinary, String, Text, func
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, LargeBinary, String, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.orm import Base
 
@@ -20,6 +20,10 @@ class Page(Base):
     y_state: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
     locked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     content_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # True once the sender has "sent" for signature. Real email comes later.
+    emails_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    pdf_bytes: Mapped[Optional[bytes]] = mapped_column(LargeBinary, nullable=True)
+    pdf_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
         nullable=False,
@@ -30,3 +34,32 @@ class Page(Base):
         nullable=False,
         server_default=func.now(),
     )
+    assignees: Mapped[list["PageAssignee"]] = relationship(
+        back_populates="page",
+        cascade="all, delete-orphan",
+        order_by="PageAssignee.sort_order",
+    )
+
+
+class PageAssignee(Base):
+    """Someone invited to sign a locked page. Emails are not sent yet."""
+
+    __tablename__ = "page_assignees"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    page_id: Mapped[str] = mapped_column(
+        String(36),
+        ForeignKey("pages.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+    )
+    page: Mapped["Page"] = relationship(back_populates="assignees")
+

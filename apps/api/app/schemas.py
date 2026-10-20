@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class ChunkIn(BaseModel):
@@ -20,6 +20,7 @@ class PageSummary(BaseModel):
     id: str
     title: str
     locked: bool = False
+    emails_sent: bool = False
 
 
 class PageOut(BaseModel):
@@ -28,6 +29,9 @@ class PageOut(BaseModel):
     chunks: list[dict[str, Any]]
     locked: bool = False
     content_hash: str | None = None
+    emails_sent: bool = False
+    pdf_hash: str | None = None
+    has_pdf: bool = False
 
 
 class PageIntegrityOut(BaseModel):
@@ -38,3 +42,35 @@ class PageIntegrityOut(BaseModel):
     content_hash: str | None
     computed_hash: str
     matches: bool
+
+
+class AssigneeIn(BaseModel):
+    name: str = ""
+    email: str = ""
+
+    @field_validator("name")
+    @classmethod
+    def name_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned:
+            raise ValueError("Name is required")
+        return cleaned
+
+    @field_validator("email")
+    @classmethod
+    def email_required(cls, value: str) -> str:
+        cleaned = value.strip()
+        if not cleaned or "@" not in cleaned or "." not in cleaned.split("@")[-1]:
+            raise ValueError("A valid email is required")
+        return cleaned.lower()
+
+
+class AssigneeOut(BaseModel):
+    id: str
+    name: str
+    email: str
+    sort_order: int
+
+
+class AssigneesWrite(BaseModel):
+    assignees: list[AssigneeIn] = Field(default_factory=list)

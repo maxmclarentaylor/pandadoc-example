@@ -1,0 +1,86 @@
+.sign-doc {
+  width: min(816px, 100%);
+  margin: 0 auto;
+  padding: 2rem 2rem 3rem;
+  background: #fff;
+  border: 1px solid #e6e8ec;
+  border-radius: 4px;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.sign-doc-title {
+  margin: 0 0 1.5rem;
+  color: #1c1c1c;
+  font-size: 1.55rem;
+  font-weight: 650;
+}
+
+.sign-doc-chunks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1.1rem;
+}
+
+.sign-doc-chunk {
+  min-width: 0;
+}
+
+.sign-doc-chunk .signature-block,
+.sign-doc-chunk .date-block {
+  margin: 0;
+}
+
+.sign-doc-text,
+.sign-doc-date,
+.sign-doc-placeholder {
+  margin: 0;
+  color: #1c1c1c;
+  white-space: pre-wrap;
+  line-height: 1.55;
+}
+
+.sign-doc-placeholder {
+  color: #a1a1aa;
+}
+
+.sign-doc-image,
+.sign-doc-signature {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+
+.sign-doc-signature {
+  max-height: 120px;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.sign-doc-video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border: 0;
+  background: #0f172a;
+}
+
+.sign-doc-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+}
+
+.sign-doc-table th,
+.sign-doc-table td {
+  padding: 0.55rem 0.65rem;
+  border: 1px solid #e4e4e7;
+  text-align: left;
+  vertical-align: top;
+}
+
+.sign-doc-table th {
+  background: #fafafa;
+  color: #52525b;
+  font-weight: 600;
+}

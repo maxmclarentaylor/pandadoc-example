@@ -4,12 +4,19 @@ import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import {
   createPage,
+  downloadPagePdf,
+  fetchAssignees,
   fetchPage,
   lockPage,
+  markPageSent,
   pageCollabUrl,
-  unlockPage,
+  saveAssignees,
   verifyPageIntegrity,
+  type AssigneeWrite,
+  type PageAssignee,
 } from './api'
+import AssigneesModal from './AssigneesModal'
+import ConfirmLockModal from './ConfirmLockModal'
 import { useAuth } from './AuthContext'
 import {
   DndContext,
@@ -71,6 +78,15 @@ export default function PageEditor() {
   const [contentHash, setContentHash] = useState<string | null>(null)
   const [lockBusy, setLockBusy] = useState(false)
   const [integrity, setIntegrity] = useState<'idle' | 'checking' | 'ok' | 'mismatch' | 'error'>('idle')
+  const [assignees, setAssignees] = useState<PageAssignee[]>([])
+  const [assigneesOpen, setAssigneesOpen] = useState(false)
+  const [assigneesSaving, setAssigneesSaving] = useState(false)
+  const [assigneesError, setAssigneesError] = useState<string | null>(null)
+  const [emailsSent, setEmailsSent] = useState(false)
+  const [sendBusy, setSendBusy] = useState(false)
+  const [pdfHash, setPdfHash] = useState<string | null>(null)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false)
   const docRef = useRef<Y.Doc | null>(null)
   const remoteEdit = useRef(false)
   const lockedRef = useRef(false)
@@ -93,6 +109,10 @@ export default function PageEditor() {
       setLocked(false)
       setContentHash(null)
       setIntegrity('idle')
+      setAssignees([])
+      setAssigneesOpen(false)
+      setAssigneesError(null)
+      setEmailsSent(false)
       setLoadError(null)
       setReady(true)
       setLive(false)
@@ -107,6 +127,11 @@ export default function PageEditor() {
     setLocked(false)
     setContentHash(null)
     setIntegrity('idle')
+    setAssignees([])
+    setAssigneesOpen(false)
+    setAssigneesError(null)
+    setEmailsSent(false)
+    setPdfHash(null)
     setLoadError(null)
 
     const id = pageId
@@ -149,7 +174,19 @@ export default function PageEditor() {
           lockedRef.current = saved.locked
           setLocked(saved.locked)
           setContentHash(saved.content_hash)
+          setEmailsSent(saved.emails_sent)
+          setPdfHash(saved.pdf_hash)
           setIntegrity('idle')
+        }
+        try {
+          const savedAssignees = await fetchAssignees(id, getAccessToken)
+          if (!cancel) {
+            setAssignees(savedAssignees)
+          }
+        } catch {
+          if (!cancel) {
+            setAssignees([])
+          }
         }
       } catch {
         // Collab can still open; lock UI falls back to Yjs meta.
@@ -212,43 +249,62 @@ export default function PageEditor() {
     writePage(doc, title, chunks)
   }, [live, locked, title, chunks])
 
-  async function setPageLocked(next: boolean) {
+  function requestLock() {
+    if (!pageId) {
+      setSaveError('Save the page before locking so the hash can be stored in the database.')
+      return
+    }
+    setSaveError(null)
+    setLockConfirmOpen(true)
+  }
+
+  async function confirmLock() {
+    if (!pageId || locked) {
+      return
+    }
+
     setCogMenuId(null)
     setSelectedChunkId(null)
     setPickerAfterId(null)
     setSaveError(null)
     setIntegrity('idle')
-
-    if (!pageId) {
-      setSaveError('Save the page before locking so the hash can be stored in the database.')
-      return
-    }
-
     setLockBusy(true)
+
     try {
-      if (next) {
-        const lockedPage = await lockPage(
-          pageId,
-          { title: title.trim() || DEFAULT_TITLE, chunks },
-          getAccessToken,
-        )
-        lockedRef.current = true
-        setLocked(true)
-        setContentHash(lockedPage.content_hash)
-      } else {
-        await unlockPage(pageId, getAccessToken)
-        lockedRef.current = false
-        setLocked(false)
-        setContentHash(null)
-      }
+      const lockedPage = await lockPage(
+        pageId,
+        { title: title.trim() || DEFAULT_TITLE, chunks },
+        getAccessToken,
+      )
+      lockedRef.current = true
+      setLocked(true)
+      setContentHash(lockedPage.content_hash)
+      setPdfHash(lockedPage.pdf_hash)
+      setLockConfirmOpen(false)
       const doc = docRef.current
       if (live && doc) {
-        writeLocked(doc, next)
+        writeLocked(doc, true)
       }
     } catch (err) {
-      setSaveError(err instanceof Error ? err.message : next ? 'Could not lock page' : 'Could not unlock page')
+      setSaveError(err instanceof Error ? err.message : 'Could not lock page')
     } finally {
       setLockBusy(false)
+    }
+  }
+
+  async function handleMarkSent() {
+    if (!pageId || !locked || assignees.length === 0 || emailsSent) {
+      return
+    }
+    setSendBusy(true)
+    setSaveError(null)
+    try {
+      const sent = await markPageSent(pageId, getAccessToken)
+      setEmailsSent(sent.emails_sent)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not mark page as sent')
+    } finally {
+      setSendBusy(false)
     }
   }
 
@@ -265,6 +321,43 @@ export default function PageEditor() {
     } catch (err) {
       setIntegrity('error')
       setSaveError(err instanceof Error ? err.message : 'Could not verify page integrity')
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!pageId || !locked) {
+      return
+    }
+    setPdfBusy(true)
+    setSaveError(null)
+    try {
+      const safe = (title.trim() || DEFAULT_TITLE).replace(/[^\w.\-]+/g, '_').slice(0, 80)
+      await downloadPagePdf(pageId, getAccessToken, `${safe || 'page'}.pdf`)
+      if (!pdfHash) {
+        const refreshed = await fetchPage(pageId, getAccessToken)
+        setPdfHash(refreshed.pdf_hash)
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not download PDF')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
+  async function handleSaveAssignees(next: AssigneeWrite[]) {
+    if (!pageId) {
+      return
+    }
+    setAssigneesSaving(true)
+    setAssigneesError(null)
+    try {
+      const saved = await saveAssignees(pageId, next, getAccessToken)
+      setAssignees(saved)
+      setAssigneesOpen(false)
+    } catch (err) {
+      setAssigneesError(err instanceof Error ? err.message : 'Could not save assignees')
+    } finally {
+      setAssigneesSaving(false)
     }
   }
 
@@ -407,25 +500,54 @@ export default function PageEditor() {
                 onChange={(event) => setTitle(event.target.value)}
               />
               {locked ? (
-                <button
-                  type="button"
-                  className="page-unlock"
-                  onClick={() => void setPageLocked(false)}
-                  disabled={lockBusy}
-                >
-                  {lockBusy ? 'Unlocking…' : 'Unlock'}
-                </button>
+                <span className="page-locked-badge">Locked</span>
               ) : (
                 <button
                   type="button"
                   className="page-lock"
-                  onClick={() => void setPageLocked(true)}
+                  onClick={requestLock}
                   disabled={lockBusy || !pageId || !ready}
                   title={pageId ? undefined : 'Save the page before locking'}
                 >
-                  {lockBusy ? 'Locking…' : 'Lock'}
+                  Lock
                 </button>
               )}
+              <button
+                type="button"
+                className="page-assignees"
+                onClick={() => {
+                  setAssigneesError(null)
+                  setAssigneesOpen(true)
+                }}
+                disabled={!locked || !pageId}
+                title={locked ? undefined : 'Lock the page before adding assignees'}
+              >
+                Assignees{assignees.length > 0 ? ` (${assignees.length})` : ''}
+              </button>
+              <button
+                type="button"
+                className="page-send"
+                onClick={() => void handleMarkSent()}
+                disabled={!locked || !pageId || assignees.length === 0 || emailsSent || sendBusy}
+                title={
+                  emailsSent
+                    ? 'Already marked as sent'
+                    : assignees.length === 0
+                      ? 'Add assignees before sending'
+                      : 'Mark as sent for signature (no email yet)'
+                }
+              >
+                {emailsSent ? 'Sent' : sendBusy ? 'Sending…' : 'Send for signature'}
+              </button>
+              <button
+                type="button"
+                className="page-pdf"
+                onClick={() => void handleDownloadPdf()}
+                disabled={!locked || !pageId || pdfBusy}
+                title={locked ? undefined : 'Lock the page before downloading a PDF'}
+              >
+                {pdfBusy ? 'Preparing PDF…' : 'Download PDF'}
+              </button>
               <button
                 type="button"
                 className="page-save"
@@ -435,15 +557,42 @@ export default function PageEditor() {
                 {pageId ? (live ? 'Live' : 'Connecting') : saving ? 'Saving' : 'Save'}
               </button>
             </div>
+            <ConfirmLockModal
+              open={lockConfirmOpen}
+              busy={lockBusy}
+              onClose={() => {
+                if (!lockBusy) {
+                  setLockConfirmOpen(false)
+                }
+              }}
+              onConfirm={() => void confirmLock()}
+            />
+            <AssigneesModal
+              open={assigneesOpen}
+              initial={assignees}
+              saving={assigneesSaving}
+              error={assigneesError}
+              onClose={() => {
+                if (!assigneesSaving) {
+                  setAssigneesOpen(false)
+                  setAssigneesError(null)
+                }
+              }}
+              onSave={(next) => void handleSaveAssignees(next)}
+            />
             {locked ? (
               <div className="page-lock-banner" role="status">
-                <p>
-                  This page is locked. Anyone can view it, but it can’t be edited until someone unlocks it.
-                </p>
+                <p>This page is locked. Anyone can view it, but it can’t be edited.</p>
                 {contentHash ? (
                   <p className="page-lock-hash">
-                    <span className="page-lock-hash-label">SHA-256</span>
+                    <span className="page-lock-hash-label">Content SHA-256</span>
                     <code>{contentHash}</code>
+                  </p>
+                ) : null}
+                {pdfHash ? (
+                  <p className="page-lock-hash">
+                    <span className="page-lock-hash-label">PDF SHA-256</span>
+                    <code>{pdfHash}</code>
                   </p>
                 ) : null}
                 <div className="page-lock-actions">

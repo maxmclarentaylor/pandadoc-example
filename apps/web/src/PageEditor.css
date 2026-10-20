@@ -63,7 +63,9 @@
 }
 
 .page-lock,
-.page-unlock {
+.page-assignees,
+.page-send,
+.page-pdf {
   padding: 0.5rem 0.9rem;
   border: 1px solid #d4d4d8;
   border-radius: 8px;
@@ -74,9 +76,254 @@
   cursor: pointer;
 }
 
-.page-lock:disabled {
+.page-locked-badge {
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background: #f4f4f5;
+  color: #52525b;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.page-send {
+  border-color: #1f7a4d;
+  color: #1f7a4d;
+}
+
+.page-lock:disabled,
+.page-assignees:disabled,
+.page-send:disabled,
+.page-pdf:disabled {
   opacity: 0.55;
   cursor: not-allowed;
+}
+
+.lock-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.lock-confirm-modal {
+  width: min(420px, 100%);
+  padding: 1.15rem 1.2rem 1.2rem;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.lock-confirm-modal h2 {
+  margin: 0;
+  color: #1c1c1c;
+  font-size: 1.15rem;
+}
+
+.lock-confirm-modal p {
+  margin: 0.65rem 0 0;
+  color: #52525b;
+  font-size: 0.92rem;
+  line-height: 1.45;
+}
+
+.lock-confirm-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1.1rem;
+}
+
+.lock-confirm-cancel,
+.lock-confirm-confirm {
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.lock-confirm-cancel {
+  border: 1px solid #e4e4e7;
+  background: #fff;
+  color: #3f3f46;
+}
+
+.lock-confirm-confirm {
+  border: 0;
+  background: #1f7a4d;
+  color: #fff;
+}
+
+.lock-confirm-cancel:disabled,
+.lock-confirm-confirm:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.assignees-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 1.25rem;
+  background: rgba(15, 23, 42, 0.35);
+}
+
+.assignees-modal {
+  width: min(520px, 100%);
+  max-height: min(90vh, 720px);
+  overflow: auto;
+  padding: 1.1rem 1.15rem 1.15rem;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+}
+
+.assignees-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.assignees-modal-header h2 {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #1c1c1c;
+}
+
+.assignees-close {
+  width: 2rem;
+  height: 2rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #71717a;
+  font-size: 1.35rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.assignees-help {
+  margin: 0.55rem 0 0.9rem;
+  color: #71717a;
+  font-size: 0.88rem;
+}
+
+.assignees-list {
+  display: grid;
+  gap: 0.75rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.assignees-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr auto;
+  gap: 0.55rem;
+  align-items: end;
+}
+
+.assignees-row label {
+  display: grid;
+  gap: 0.3rem;
+  color: #52525b;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.assignees-row input {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid #e4e4e7;
+  border-radius: 8px;
+  background: #fff;
+  color: #1c1c1c;
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
+.assignees-remove,
+.assignees-add,
+.assignees-cancel,
+.assignees-save {
+  font: inherit;
+  cursor: pointer;
+}
+
+.assignees-remove {
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #9b2c2c;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.assignees-add {
+  margin-top: 0.85rem;
+  padding: 0.45rem 0.7rem;
+  border: 1px dashed #d4d4d8;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #3f3f46;
+  font-weight: 600;
+}
+
+.assignees-error {
+  margin: 0.75rem 0 0;
+  color: #9b2c2c;
+  font-size: 0.85rem;
+}
+
+.assignees-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1rem;
+}
+
+.assignees-cancel,
+.assignees-save {
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  font-weight: 600;
+}
+
+.assignees-cancel {
+  border: 1px solid #e4e4e7;
+  background: #fff;
+  color: #3f3f46;
+}
+
+.assignees-save {
+  border: 0;
+  background: #1f7a4d;
+  color: #fff;
+}
+
+.assignees-save:disabled,
+.assignees-cancel:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 640px) {
+  .assignees-row {
+    grid-template-columns: 1fr;
+  }
+
+  .assignees-remove {
+    justify-self: start;
+  }
 }
 
 .page-lock-banner {
