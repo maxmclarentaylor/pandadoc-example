@@ -1,5 +1,6 @@
 """Request and response bodies for page routes."""
 
+from datetime import datetime
 from typing import Any
 
 from pydantic import BaseModel, Field, field_validator
@@ -16,11 +17,18 @@ class PageWrite(BaseModel):
     chunks: list[ChunkIn] = Field(default_factory=list)
 
 
+class SigningFieldsWrite(BaseModel):
+    """Locked-page updates allowed while signing: signature/date chunks only."""
+
+    chunks: list[ChunkIn] = Field(default_factory=list)
+
+
 class PageSummary(BaseModel):
     id: str
     title: str
     locked: bool = False
     emails_sent: bool = False
+    signing_complete: bool = False
 
 
 class PageOut(BaseModel):
@@ -30,6 +38,9 @@ class PageOut(BaseModel):
     locked: bool = False
     content_hash: str | None = None
     emails_sent: bool = False
+    signing_complete: bool = False
+    sealed: bool = False
+    sealed_at: datetime | None = None
     pdf_hash: str | None = None
     has_pdf: bool = False
 
@@ -44,9 +55,19 @@ class PageIntegrityOut(BaseModel):
     matches: bool
 
 
+# Local-demo Entra users only. Production would not map invitees this way.
+DEMO_ENTRA_UPNS = frozenset(
+    {
+        "editor1@maxmclarentayloroutlook.onmicrosoft.com",
+        "editor2@maxmclarentayloroutlook.onmicrosoft.com",
+    }
+)
+
+
 class AssigneeIn(BaseModel):
     name: str = ""
     email: str = ""
+    demo_entra_upn: str = ""
 
     @field_validator("name")
     @classmethod
@@ -64,11 +85,21 @@ class AssigneeIn(BaseModel):
             raise ValueError("A valid email is required")
         return cleaned.lower()
 
+    @field_validator("demo_entra_upn")
+    @classmethod
+    def demo_login_required(cls, value: str) -> str:
+        cleaned = value.strip().lower()
+        if cleaned not in DEMO_ENTRA_UPNS:
+            raise ValueError("Pick a demo Entra user (Editor One or Editor Two)")
+        return cleaned
+
 
 class AssigneeOut(BaseModel):
     id: str
     name: str
     email: str
+    demo_entra_upn: str
+    signed_at: datetime | None = None
     sort_order: int
 
 

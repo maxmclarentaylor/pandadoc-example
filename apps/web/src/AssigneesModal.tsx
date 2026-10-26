@@ -1,10 +1,11 @@
 import { useEffect, useId, useState } from 'react'
-import type { AssigneeWrite, PageAssignee } from './api'
+import { DEMO_ENTRA_USERS, type AssigneeWrite, type PageAssignee } from './api'
 
 type DraftAssignee = {
   key: string
   name: string
   email: string
+  demo_entra_upn: string
 }
 
 type AssigneesModalProps = {
@@ -17,7 +18,7 @@ type AssigneesModalProps = {
 }
 
 function blankRow(): DraftAssignee {
-  return { key: crypto.randomUUID(), name: '', email: '' }
+  return { key: crypto.randomUUID(), name: '', email: '', demo_entra_upn: '' }
 }
 
 function toDraft(rows: PageAssignee[]): DraftAssignee[] {
@@ -28,6 +29,7 @@ function toDraft(rows: PageAssignee[]): DraftAssignee[] {
     key: row.id,
     name: row.name,
     email: row.email,
+    demo_entra_upn: row.demo_entra_upn || '',
   }))
 }
 
@@ -65,8 +67,12 @@ export default function AssigneesModal({
 
   function handleSave() {
     const assignees = rows
-      .map((row) => ({ name: row.name.trim(), email: row.email.trim() }))
-      .filter((row) => row.name || row.email)
+      .map((row) => ({
+        name: row.name.trim(),
+        email: row.email.trim(),
+        demo_entra_upn: row.demo_entra_upn.trim(),
+      }))
+      .filter((row) => row.name || row.email || row.demo_entra_upn)
     onSave(assignees)
   }
 
@@ -86,7 +92,13 @@ export default function AssigneesModal({
           </button>
         </div>
         <p className="assignees-help">
-          Add people who will sign this page. Names and emails are saved now; nothing is emailed yet.
+          Add people who will sign this page. The personal email gets the invite; the demo login is who they sign in
+          as.
+        </p>
+        <p className="assignees-demo-note">
+          Demo only: because Entra logins and real inboxes are separate in this local setup, pick which demo user
+          (Editor One / Editor Two) this invitee will use when signing. In production you would not ask for this —
+          the signer’s authenticated identity would come from their own account.
         </p>
         <ul className="assignees-list">
           {rows.map((row, index) => (
@@ -101,7 +113,7 @@ export default function AssigneesModal({
                 />
               </label>
               <label>
-                <span>Email</span>
+                <span>Email (real inbox)</span>
                 <input
                   type="email"
                   value={row.email}
@@ -109,6 +121,20 @@ export default function AssigneesModal({
                   autoComplete="email"
                   onChange={(event) => updateRow(row.key, { email: event.target.value })}
                 />
+              </label>
+              <label>
+                <span>Demo Entra user</span>
+                <select
+                  value={row.demo_entra_upn}
+                  onChange={(event) => updateRow(row.key, { demo_entra_upn: event.target.value })}
+                >
+                  <option value="">Select…</option>
+                  {DEMO_ENTRA_USERS.map((user) => (
+                    <option key={user.upn} value={user.upn}>
+                      {user.label}
+                    </option>
+                  ))}
+                </select>
               </label>
               <button type="button" className="assignees-remove" onClick={() => removeRow(row.key)}>
                 Remove

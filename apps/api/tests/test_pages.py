@@ -25,7 +25,13 @@ def test_create_list_and_get_pages(client, auth_header, db):
     listed = client.get("/v1/pages", headers=auth_header)
     assert listed.status_code == 200
     match = next(item for item in listed.json() if item["id"] == page_id)
-    assert match == {"id": page_id, "title": "Notes", "locked": False, "emails_sent": False}
+    assert match == {
+        "id": page_id,
+        "title": "Notes",
+        "locked": False,
+        "emails_sent": False,
+        "signing_complete": False,
+    }
 
     fetched = client.get(f"/v1/pages/{page_id}", headers=auth_header)
     assert fetched.status_code == 200

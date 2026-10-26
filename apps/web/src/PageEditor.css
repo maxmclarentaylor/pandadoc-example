@@ -210,9 +210,20 @@
 }
 
 .assignees-help {
-  margin: 0.55rem 0 0.9rem;
+  margin: 0.55rem 0 0.55rem;
   color: #71717a;
   font-size: 0.88rem;
+}
+
+.assignees-demo-note {
+  margin: 0 0 0.9rem;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid #fde68a;
+  border-radius: 8px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.82rem;
+  line-height: 1.45;
 }
 
 .assignees-list {
@@ -225,7 +236,7 @@
 
 .assignees-row {
   display: grid;
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: 1fr 1fr 1fr auto;
   gap: 0.55rem;
   align-items: end;
 }
@@ -238,7 +249,8 @@
   font-weight: 600;
 }
 
-.assignees-row input {
+.assignees-row input,
+.assignees-row select {
   width: 100%;
   padding: 0.45rem 0.55rem;
   border: 1px solid #e4e4e7;

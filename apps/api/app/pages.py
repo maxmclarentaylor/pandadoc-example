@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 import re
 import uuid
@@ -19,6 +20,7 @@ from app.email_send import EmailConfigError, EmailSendError, send_signing_invite
 from app.models import Page, PageAssignee
 from app.page_integrity import content_hash
 from app.page_pdf import pdf_sha256, render_page_pdf
+from app.page_seal import SealError, seal_pdf
 from app.schemas import (
     AssigneeOut,
     AssigneesWrite,
@@ -26,6 +28,7 @@ from app.schemas import (
     PageOut,
     PageSummary,
     PageWrite,
+    SigningFieldsWrite,
 )
 
 log = logging.getLogger(__name__)
@@ -63,9 +66,12 @@ def _y_state(title: str, chunks: list[dict[str, Any]]) -> bytes | None:
     return encode_page(title, chunks)
 
 
-def _get_page(db: Session, page_id: str) -> Page:
+def _get_page(db: Session, page_id: str, *, for_update: bool = False) -> Page:
     """Any signed-in user can open any page (temporary shared access)."""
-    page = db.scalar(select(Page).where(Page.id == page_id))
+    stmt = select(Page).where(Page.id == page_id)
+    if for_update:
+        stmt = stmt.with_for_update()
+    page = db.scalar(stmt)
     if page is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Page not found")
     return page
@@ -79,6 +85,9 @@ def _to_out(page: Page) -> PageOut:
         locked=page.locked,
         content_hash=page.content_hash,
         emails_sent=page.emails_sent,
+        signing_complete=page.signing_complete,
+        sealed=page.sealed_at is not None,
+        sealed_at=page.sealed_at,
         pdf_hash=page.pdf_hash,
         has_pdf=bool(page.pdf_bytes),
     )
@@ -97,6 +106,7 @@ def _to_summary(page: Page) -> PageSummary:
         title=page.title,
         locked=page.locked,
         emails_sent=page.emails_sent,
+        signing_complete=page.signing_complete,
     )
 
 
@@ -116,13 +126,75 @@ def _require_locked(page: Page) -> None:
         )
 
 
+SIGNABLE_CHUNK_TYPES = frozenset({"signature", "date"})
+
+
+def _chunk_fingerprint(chunk: dict[str, Any]) -> str:
+    return json.dumps(chunk, sort_keys=True, separators=(",", ":"), ensure_ascii=False)
+
+
+def _merge_signing_chunks(
+    stored: list[dict[str, Any]],
+    incoming: list[dict[str, Any]],
+) -> list[dict[str, Any]]:
+    """Allow signature/date field edits only; everything else must stay identical."""
+    if len(stored) != len(incoming):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Signing cannot add, remove, or reorder blocks",
+        )
+    merged: list[dict[str, Any]] = []
+    for old, new in zip(stored, incoming, strict=True):
+        if old.get("id") != new.get("id") or old.get("type") != new.get("type"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Signing cannot change block structure",
+            )
+        kind = str(old.get("type") or "")
+        if kind in SIGNABLE_CHUNK_TYPES:
+            merged.append(new)
+            continue
+        if _chunk_fingerprint(old) != _chunk_fingerprint(new):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Only signature and date fields can change on a locked page",
+            )
+        merged.append(old)
+    return merged
+
+
 def _assignee_out(row: PageAssignee) -> AssigneeOut:
     return AssigneeOut(
         id=row.id,
         name=row.name,
         email=row.email,
+        demo_entra_upn=row.demo_entra_upn,
+        signed_at=row.signed_at,
         sort_order=row.sort_order,
     )
+
+
+def _claims_upn(claims: dict[str, Any]) -> str:
+    raw = claims.get("preferred_username") or claims.get("upn") or ""
+    if not isinstance(raw, str) or not raw.strip():
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Token is missing preferred_username",
+        )
+    return raw.strip().lower()
+
+
+def _signature_chunks_complete(chunks: list[dict[str, Any]]) -> bool:
+    signatures = [c for c in chunks if str(c.get("type") or "") == "signature"]
+    if not signatures:
+        return False
+    return all(str(c.get("dataUrl") or "").startswith("data:image") for c in signatures)
+
+
+def _assignees_all_signed(assignees: list[PageAssignee]) -> bool:
+    if not assignees:
+        return False
+    return all(row.signed_at is not None for row in assignees)
 
 
 @router.get("", response_model=list[PageSummary])
@@ -175,6 +247,7 @@ def create_page(
         locked=False,
         content_hash=None,
         emails_sent=False,
+        signing_complete=False,
     )
     db.add(page)
     db.commit()
@@ -194,6 +267,80 @@ def update_page(
     page.title = _title(body.title)
     page.chunks = _chunks(body)
     page.y_state = _y_state(page.title, page.chunks)
+    page.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(page)
+    return _to_out(page)
+
+
+@router.post("/{page_id}/signing-fields", response_model=PageOut)
+def update_signing_fields(
+    page_id: str,
+    body: SigningFieldsWrite,
+    claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> PageOut:
+    """Persist signature/date edits, mark the matching assignee signed, maybe seal.
+
+    The request that completes signing renders the final PDF, seals it, and
+    commits signing_complete together with sealed_at.
+    """
+    page = _get_page(db, page_id, for_update=True)
+    _require_locked(page)
+    if not page.emails_sent:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Page must be sent for signature before signing fields can change",
+        )
+    if page.signing_complete:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Signing is already complete for this page",
+        )
+
+    upn = _claims_upn(claims)
+    assignees = list(
+        db.scalars(
+            select(PageAssignee)
+            .where(PageAssignee.page_id == page.id)
+            .order_by(PageAssignee.sort_order, PageAssignee.created_at)
+        )
+    )
+    matched = next((row for row in assignees if row.demo_entra_upn == upn), None)
+    if matched is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Signed-in user is not an assignee for this page",
+        )
+
+    incoming = [chunk.model_dump() for chunk in body.chunks]
+    page.chunks = _merge_signing_chunks(list(page.chunks), incoming)
+    page.y_state = _y_state(page.title, list(page.chunks))
+    page.content_hash = content_hash(page.title, list(page.chunks))
+    if matched.signed_at is None:
+        matched.signed_at = datetime.now(timezone.utc)
+
+    complete = _assignees_all_signed(assignees) and _signature_chunks_complete(list(page.chunks))
+    try:
+        pdf = render_page_pdf(page.title, list(page.chunks))
+        if complete:
+            pdf = seal_pdf(pdf)
+    except SealError as exc:
+        log.exception("PDF seal failed for page %s", page_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not seal PDF: {exc}",
+        ) from exc
+    except Exception as exc:  # noqa: BLE001
+        log.exception("PDF render failed for page %s after signing update", page_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not render PDF: {exc}",
+        ) from exc
+    page.pdf_bytes = pdf
+    page.pdf_hash = pdf_sha256(pdf)
+    page.signing_complete = complete
+    page.sealed_at = datetime.now(timezone.utc) if complete else None
     page.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(page)
@@ -258,8 +405,12 @@ def unlock_page(
     page.locked = False
     page.content_hash = None
     page.emails_sent = False
+    page.signing_complete = False
+    page.sealed_at = None
     page.pdf_bytes = None
     page.pdf_hash = None
+    for row in db.scalars(select(PageAssignee).where(PageAssignee.page_id == page.id)):
+        row.signed_at = None
     page.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(page)
@@ -401,11 +552,14 @@ def replace_assignees(
             page_id=page.id,
             name=item.name,
             email=item.email,
+            demo_entra_upn=item.demo_entra_upn,
             sort_order=index,
         )
         db.add(row)
         saved.append(row)
 
+    page.signing_complete = False
+    page.sealed_at = None
     page.updated_at = datetime.now(timezone.utc)
     db.commit()
     for row in saved:

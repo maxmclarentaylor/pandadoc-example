@@ -141,6 +141,7 @@ export type PageSummary = {
   title: string
   locked?: boolean
   emails_sent?: boolean
+  signing_complete?: boolean
 }
 
 export type PageDocument = {
@@ -150,6 +151,9 @@ export type PageDocument = {
   locked: boolean
   content_hash: string | null
   emails_sent: boolean
+  signing_complete: boolean
+  sealed: boolean
+  sealed_at: string | null
   pdf_hash: string | null
   has_pdf: boolean
 }
@@ -172,6 +176,18 @@ export function fetchPagesToSign(getAccessToken: GetAccessToken): Promise<PageSu
 /** Mark a locked page as sent. Does not deliver email yet. */
 export function markPageSent(pageId: string, getAccessToken: GetAccessToken): Promise<PageDocument> {
   return apiPost<PageDocument>(`/v1/pages/${pageId}/send`, {}, getAccessToken)
+}
+
+/**
+ * Save signature/date field edits on a locked, sent page.
+ * When this save completes signing, the server seals the PDF and returns sealed: true.
+ */
+export function saveSigningFields(
+  pageId: string,
+  chunks: Chunk[],
+  getAccessToken: GetAccessToken,
+): Promise<PageDocument> {
+  return apiPost<PageDocument>(`/v1/pages/${pageId}/signing-fields`, { chunks }, getAccessToken)
 }
 
 /** One saved page, including its chunks. */
@@ -253,16 +269,31 @@ export function verifyPageIntegrity(
   return apiGet<PageIntegrity>(`/v1/pages/${pageId}/integrity`, getAccessToken)
 }
 
+/** Demo-only Entra logins for local signing. Not a production pattern. */
+export const DEMO_ENTRA_USERS = [
+  {
+    label: 'Editor One',
+    upn: 'editor1@maxmclarentayloroutlook.onmicrosoft.com',
+  },
+  {
+    label: 'Editor Two',
+    upn: 'editor2@maxmclarentayloroutlook.onmicrosoft.com',
+  },
+] as const
+
 export type PageAssignee = {
   id: string
   name: string
   email: string
+  demo_entra_upn: string
+  signed_at: string | null
   sort_order: number
 }
 
 export type AssigneeWrite = {
   name: string
   email: string
+  demo_entra_upn: string
 }
 
 /** Assignees saved for a page. Email is not sent yet. */
