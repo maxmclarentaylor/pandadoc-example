@@ -26,17 +26,18 @@ Thin Segment-like ingest + Mixpanel-like recent-event read against Azure Postgre
 - `app/batch.py` — batch ingest item processing (partial success)
 - `app/pipeline.py` — enqueue + async parallel tick (`gather` + `Semaphore` + SKIP LOCKED)
 - `app/pipeline_telemetry.py` — OpenTelemetry spans/metrics for the tick (App Insights when configured)
-- `app/db.py` — engine, `get_db` (migrations are **not** run on startup)
+- `app/db.py` — engine, `get_db` (on Azure, Alembic runs in the startup command before uvicorn)
 - `alembic/` — versioned DB migrations
 
 ## Migrations (PR-gated)
-Schema changes apply only after merge to `main`, via **Deploy API**
-(`.github/workflows/deploy-api.yml` → Alembic on App Service).
+Schema changes apply on the App Service when **Deploy API** restarts the app.
+The startup command runs `alembic upgrade head` with `$APP_PATH/antenv/bin/python`,
+then starts uvicorn. That container can reach the private database.
 
 That way:
 1. Change goes through a pull request
-2. Merge to `main` deploys code
-3. Then `alembic upgrade head` runs in Azure (VNet / Private Endpoint path)
+2. Merge deploys code
+3. The app starts, applies migrations, then serves traffic
 
 Locally (shared/dev DB), apply yourself before testing schema changes:
 
