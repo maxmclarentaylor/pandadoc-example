@@ -19,7 +19,11 @@ def test_replace_assignees_on_locked_page(client, auth_header, db):
         headers=auth_header,
         json={
             "assignees": [
-                {"name": "Ada", "email": "ada@example.com"},
+                {
+                    "name": "Ada",
+                    "email": "ada@example.com",
+                    "demo_entra_upn": "editor1@maxmclarentayloroutlook.onmicrosoft.com",
+                },
             ]
         },
     )
@@ -37,8 +41,16 @@ def test_replace_assignees_on_locked_page(client, auth_header, db):
         headers=auth_header,
         json={
             "assignees": [
-                {"name": "Ada Lovelace", "email": "Ada@Example.com"},
-                {"name": "Grace Hopper", "email": "grace@example.com"},
+                {
+                    "name": "Ada Lovelace",
+                    "email": "Ada@Example.com",
+                    "demo_entra_upn": "editor1@maxmclarentayloroutlook.onmicrosoft.com",
+                },
+                {
+                    "name": "Grace Hopper",
+                    "email": "grace@example.com",
+                    "demo_entra_upn": "editor2@maxmclarentayloroutlook.onmicrosoft.com",
+                },
             ]
         },
     )
@@ -58,7 +70,15 @@ def test_replace_assignees_on_locked_page(client, auth_header, db):
     replaced = client.put(
         f"/v1/pages/{page_id}/assignees",
         headers=auth_header,
-        json={"assignees": [{"name": "Only One", "email": "one@example.com"}]},
+        json={
+            "assignees": [
+                {
+                    "name": "Only One",
+                    "email": "one@example.com",
+                    "demo_entra_upn": "editor1@maxmclarentayloroutlook.onmicrosoft.com",
+                }
+            ]
+        },
     )
     assert replaced.status_code == 200
     assert len(replaced.json()) == 1

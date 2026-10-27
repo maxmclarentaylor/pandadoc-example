@@ -17,9 +17,16 @@
 
 .page-heading {
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
   gap: 0.75rem;
   margin-bottom: 0.85rem;
+}
+
+.page-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .page-back,
@@ -37,8 +44,7 @@
 }
 
 .page-title {
-  flex: 1;
-  min-width: 0;
+  width: 100%;
   padding: 0.55rem 0.8rem;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -66,8 +72,7 @@
 
 .page-lock,
 .page-assignees,
-.page-send,
-.page-pdf {
+.page-send {
   padding: 0.5rem 0.9rem;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -95,8 +100,7 @@
 
 .page-lock:disabled,
 .page-assignees:disabled,
-.page-send:disabled,
-.page-pdf:disabled {
+.page-send:disabled {
   opacity: 0.55;
   cursor: not-allowed;
 }

@@ -22,6 +22,18 @@ variable "entra_tenant_id" {
   default     = "c97ce120-adbc-4e5b-b458-5acbac0bc05f"
 }
 
+variable "operator_object_id" {
+  type        = string
+  description = "Entra object id of the person who runs Terraform locally. Kept as Key Vault Administrator."
+  default     = "88a5ca06-4321-4bcf-b6c4-3ac74066a73e"
+}
+
+variable "github_actions_object_id" {
+  type        = string
+  description = "Entra object id of the GitHub Actions app. Granted Key Vault Secrets Officer so plans can read secrets."
+  default     = "bb9fd3c9-507b-42d7-8f59-b5a253faea3e"
+}
+
 variable "entra_api_client_id" {
   type        = string
   description = "App registration client ID for the API (audience / api://{id})"

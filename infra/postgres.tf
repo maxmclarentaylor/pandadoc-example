@@ -68,7 +68,10 @@ resource "azurerm_key_vault_secret" "postgres_admin_password" {
   value        = random_password.postgres_admin.result
   key_vault_id = azurerm_key_vault.dev.id
 
-  depends_on = [azurerm_role_assignment.current_user_kv_admin]
+  depends_on = [
+    azurerm_role_assignment.current_user_kv_admin,
+    azurerm_role_assignment.github_actions_kv_secrets,
+  ]
 }
 
 resource "azurerm_key_vault_secret" "postgres_fqdn" {
@@ -76,7 +79,10 @@ resource "azurerm_key_vault_secret" "postgres_fqdn" {
   value        = azurerm_postgresql_flexible_server.dev.fqdn
   key_vault_id = azurerm_key_vault.dev.id
 
-  depends_on = [azurerm_role_assignment.current_user_kv_admin]
+  depends_on = [
+    azurerm_role_assignment.current_user_kv_admin,
+    azurerm_role_assignment.github_actions_kv_secrets,
+  ]
 }
 
 resource "azurerm_key_vault_secret" "postgres_connection_string" {
@@ -90,5 +96,8 @@ resource "azurerm_key_vault_secret" "postgres_connection_string" {
   )
   key_vault_id = azurerm_key_vault.dev.id
 
-  depends_on = [azurerm_role_assignment.current_user_kv_admin]
+  depends_on = [
+    azurerm_role_assignment.current_user_kv_admin,
+    azurerm_role_assignment.github_actions_kv_secrets,
+  ]
 }
