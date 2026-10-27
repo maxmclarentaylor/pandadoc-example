@@ -2,6 +2,27 @@
 
 A small demo for signing a document, like PandaDoc.
 
+Two libraries are the core of the app. One seals the finished PDF. The other lets two people edit the same page at the same time, the way Google Docs does.
+
+## PDF seal
+
+When both people have signed, the API signs the PDF with **pyHanko**. The signature is embedded in the file. Later, the app reads that signature back and checks the PDF has not been changed.
+
+- `apps/api/app/page_seal.py` — `seal_pdf` writes the signature. `inspect_seal` reads it back.
+- `apps/api/app/pages.py` — `update_signing_fields` calls `seal_pdf` on the request that finishes signing. `verify_page_seal` calls `inspect_seal`.
+- `apps/api/app/page_pdf.py` — builds the PDF that pyHanko then signs.
+- `apps/api/tests/test_page_seal.py` — signs a small PDF with pyHanko and checks the signature.
+
+## Editing together
+
+This is the same kind of feature as Google Docs: two people open one document, both type, and both sets of changes stay. Google Docs built its own version of that. This demo uses **Yjs** in the browser and **pycrdt** on the API. Each browser keeps a Yjs document and sends edits through **y-websocket**. pycrdt speaks the same protocol, so an edit in one place does not wipe an edit in another.
+
+- `apps/web/src/PageEditor.tsx` — opens the Yjs document and connects with `y-websocket`.
+- `apps/web/src/collabDoc.ts` — how the page title and blocks are stored in that document.
+- `apps/api/app/collab.py` — the pycrdt document and the websocket room.
+- `apps/api/app/pages.py` — the `/{page_id}/ws` route that joins a browser to that room.
+- `apps/api/tests/test_collab_doc.py` — two edits land in the same document and both remain.
+
 ## How to use it
 
 Open the website: https://red-island-0d916eb03.5.azurestaticapps.net
