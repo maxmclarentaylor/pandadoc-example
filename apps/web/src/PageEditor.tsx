@@ -4,7 +4,6 @@ import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
 import {
   createPage,
-  downloadPagePdf,
   fetchAssignees,
   fetchPage,
   lockPage,
@@ -88,7 +87,6 @@ export default function PageEditor() {
   const [emailsSent, setEmailsSent] = useState(false)
   const [sendBusy, setSendBusy] = useState(false)
   const [pdfHash, setPdfHash] = useState<string | null>(null)
-  const [pdfBusy, setPdfBusy] = useState(false)
   const [sealed, setSealed] = useState(false)
   const [sealCheck, setSealCheck] = useState<SealCheck | null>(null)
   const [sealBusy, setSealBusy] = useState(false)
@@ -370,26 +368,6 @@ export default function PageEditor() {
     }
   }
 
-  async function handleDownloadPdf() {
-    if (!pageId || !locked) {
-      return
-    }
-    setPdfBusy(true)
-    setSaveError(null)
-    try {
-      const safe = (title.trim() || DEFAULT_TITLE).replace(/[^\w.\-]+/g, '_').slice(0, 80)
-      await downloadPagePdf(pageId, getAccessToken, `${safe || 'page'}.pdf`)
-      if (!pdfHash) {
-        const refreshed = await fetchPage(pageId, getAccessToken)
-        setPdfHash(refreshed.pdf_hash)
-      }
-    } catch (err) {
-      setSaveError(err instanceof Error ? err.message : 'Could not download PDF')
-    } finally {
-      setPdfBusy(false)
-    }
-  }
-
   async function handleSaveAssignees(next: AssigneeWrite[]) {
     if (!pageId) {
       return
@@ -535,9 +513,6 @@ export default function PageEditor() {
         <div className="editor-shell">
           <div className="editor-main">
             <div className="page-heading">
-              <button type="button" className="page-back" onClick={() => navigate('/')}>
-                Documents
-              </button>
               <input
                 className="page-title"
                 aria-label="Page title"
@@ -545,63 +520,59 @@ export default function PageEditor() {
                 disabled={locked || (Boolean(pageId) && !ready)}
                 onChange={(event) => setTitle(event.target.value)}
               />
-              {locked ? (
-                <span className="page-locked-badge">Locked</span>
-              ) : (
+              <div className="page-actions">
+                <button type="button" className="page-back" onClick={() => navigate('/')}>
+                  Documents
+                </button>
+                {locked ? (
+                  <span className="page-locked-badge">Locked</span>
+                ) : (
+                  <button
+                    type="button"
+                    className="page-lock"
+                    onClick={requestLock}
+                    disabled={lockBusy || !pageId || !ready}
+                    title={pageId ? undefined : 'Save the page before locking'}
+                  >
+                    Lock
+                  </button>
+                )}
                 <button
                   type="button"
-                  className="page-lock"
-                  onClick={requestLock}
-                  disabled={lockBusy || !pageId || !ready}
-                  title={pageId ? undefined : 'Save the page before locking'}
+                  className="page-assignees"
+                  onClick={() => {
+                    setAssigneesError(null)
+                    setAssigneesOpen(true)
+                  }}
+                  disabled={!locked || !pageId}
+                  title={locked ? undefined : 'Lock the page before adding assignees'}
                 >
-                  Lock
+                  Assignees{assignees.length > 0 ? ` (${assignees.length})` : ''}
                 </button>
-              )}
-              <button
-                type="button"
-                className="page-assignees"
-                onClick={() => {
-                  setAssigneesError(null)
-                  setAssigneesOpen(true)
-                }}
-                disabled={!locked || !pageId}
-                title={locked ? undefined : 'Lock the page before adding assignees'}
-              >
-                Assignees{assignees.length > 0 ? ` (${assignees.length})` : ''}
-              </button>
-              <button
-                type="button"
-                className="page-send"
-                onClick={() => void handleMarkSent()}
-                disabled={!locked || !pageId || assignees.length === 0 || emailsSent || sendBusy}
-                title={
-                  emailsSent
-                    ? 'Already marked as sent'
-                    : assignees.length === 0
-                      ? 'Add assignees before sending'
-                      : 'Mark as sent for signature (no email yet)'
-                }
-              >
-                {emailsSent ? 'Sent' : sendBusy ? 'Sending…' : 'Send for signature'}
-              </button>
-              <button
-                type="button"
-                className="page-pdf"
-                onClick={() => void handleDownloadPdf()}
-                disabled={!locked || !pageId || pdfBusy}
-                title={locked ? undefined : 'Lock the page before downloading a PDF'}
-              >
-                {pdfBusy ? 'Preparing PDF…' : 'Download PDF'}
-              </button>
-              <button
-                type="button"
-                className="page-save"
-                onClick={() => void savePage()}
-                disabled={locked || !ready || saving || Boolean(pageId)}
-              >
-                {pageId ? (live ? 'Live' : 'Connecting') : saving ? 'Saving' : 'Save'}
-              </button>
+                <button
+                  type="button"
+                  className="page-send"
+                  onClick={() => void handleMarkSent()}
+                  disabled={!locked || !pageId || assignees.length === 0 || emailsSent || sendBusy}
+                  title={
+                    emailsSent
+                      ? 'Already marked as sent'
+                      : assignees.length === 0
+                        ? 'Add assignees before sending'
+                        : 'Mark as sent for signature (no email yet)'
+                  }
+                >
+                  {emailsSent ? 'Sent' : sendBusy ? 'Sending…' : 'Send for signature'}
+                </button>
+                <button
+                  type="button"
+                  className="page-save"
+                  onClick={() => void savePage()}
+                  disabled={locked || !ready || saving || Boolean(pageId)}
+                >
+                  {pageId ? (live ? 'Live' : 'Connecting') : saving ? 'Saving' : 'Save'}
+                </button>
+              </div>
             </div>
             <ConfirmLockModal
               open={lockConfirmOpen}
