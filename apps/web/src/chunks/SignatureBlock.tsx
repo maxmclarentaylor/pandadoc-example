@@ -6,6 +6,7 @@ type SignatureBlockProps = {
   chunk: SignatureChunk
   onChange: ChunkChange
   onPress: () => void
+  readOnly?: boolean
 }
 
 const PEN_COLORS = [
@@ -17,7 +18,7 @@ const PEN_COLORS = [
 const PREVIEW_WIDTH = 138
 const PREVIEW_HEIGHT = 45
 
-export default function SignatureBlock({ chunk, onChange, onPress }: SignatureBlockProps) {
+export default function SignatureBlock({ chunk, onChange, onPress, readOnly = false }: SignatureBlockProps) {
   const padRef = useRef<SignaturePad>(null)
   const modalPadRef = useRef<SignaturePad>(null)
   const savedPadRef = useRef<SignaturePad>(null)
@@ -26,6 +27,12 @@ export default function SignatureBlock({ chunk, onChange, onPress }: SignatureBl
   const [tab, setTab] = useState<'draw' | 'saved'>('draw')
   const [dataUrl, setDataUrl] = useState(chunk.dataUrl)
   const [penColor, setPenColor] = useState(PEN_COLORS[0].value)
+
+  useEffect(() => {
+    if (readOnly) {
+      setOpen(false)
+    }
+  }, [readOnly])
 
   useEffect(() => {
     const pad = padRef.current
@@ -79,13 +86,16 @@ export default function SignatureBlock({ chunk, onChange, onPress }: SignatureBl
   }
 
   function openModal() {
+    if (readOnly) {
+      return
+    }
     setPenColor(PEN_COLORS[0].value)
     setOpen(true)
   }
 
   return (
     <div className="signature-block" onPointerDown={onPress}>
-      <button type="button" className="signature-preview" onClick={openModal}>
+      <button type="button" className="signature-preview" disabled={readOnly} onClick={openModal}>
         <SignaturePad
           ref={padRef}
           width={PREVIEW_WIDTH}

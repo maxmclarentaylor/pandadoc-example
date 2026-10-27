@@ -3,9 +3,10 @@ import type { ChunkChange, VideoChunk } from './types'
 type VideoBlockProps = {
   chunk: VideoChunk
   onChange: ChunkChange
+  readOnly?: boolean
 }
 
-export default function VideoBlock({ chunk, onChange }: VideoBlockProps) {
+export default function VideoBlock({ chunk, onChange, readOnly = false }: VideoBlockProps) {
   const embedUrl = embedVideoUrl(chunk.url)
 
   return (
@@ -17,14 +18,16 @@ export default function VideoBlock({ chunk, onChange }: VideoBlockProps) {
       ) : (
         <div className="media-placeholder">Video</div>
       )}
-      <label>
-        Video address
-        <input
-          value={chunk.url}
-          placeholder="YouTube, Vimeo, or a video file link"
-          onChange={(event) => onChange({ ...chunk, url: event.target.value })}
-        />
-      </label>
+      {readOnly ? null : (
+        <label>
+          Video address
+          <input
+            value={chunk.url}
+            placeholder="YouTube, Vimeo, or a video file link"
+            onChange={(event) => onChange({ ...chunk, url: event.target.value })}
+          />
+        </label>
+      )}
     </div>
   )
 }

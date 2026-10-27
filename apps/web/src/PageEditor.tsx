@@ -2,7 +2,24 @@ import { useEffect, useRef, useState, type FocusEvent } from 'react'
 import { useNavigate, useParams } from 'react-router'
 import * as Y from 'yjs'
 import { WebsocketProvider } from 'y-websocket'
-import { createPage, pageCollabUrl } from './api'
+import {
+  createPage,
+  downloadPagePdf,
+  fetchAssignees,
+  fetchPage,
+  lockPage,
+  markPageSent,
+  pageCollabUrl,
+  saveAssignees,
+  verifyPageIntegrity,
+  verifyPageSeal,
+  type SealCheck,
+  type AssigneeWrite,
+  type PageAssignee,
+} from './api'
+import AssigneesModal from './AssigneesModal'
+import SealPanel from './SealPanel'
+import ConfirmLockModal from './ConfirmLockModal'
 import { useAuth } from './AuthContext'
 import {
   DndContext,
@@ -32,7 +49,7 @@ import TableBlock from './chunks/TableBlock'
 import TextBlock from './chunks/TextBlock'
 import VideoBlock from './chunks/VideoBlock'
 import type { Chunk, ChunkChange, ChunkType } from './chunks/types'
-import { LOCAL, readPage, writePage } from './collabDoc'
+import { LOCAL, readPage, writeLocked, writePage } from './collabDoc'
 import { STARTING_CHUNKS } from './pages/salesContract'
 import './PageEditor.css'
 
@@ -60,8 +77,26 @@ export default function PageEditor() {
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
   const [live, setLive] = useState(false)
+  const [locked, setLocked] = useState(false)
+  const [contentHash, setContentHash] = useState<string | null>(null)
+  const [lockBusy, setLockBusy] = useState(false)
+  const [integrity, setIntegrity] = useState<'idle' | 'checking' | 'ok' | 'mismatch' | 'error'>('idle')
+  const [assignees, setAssignees] = useState<PageAssignee[]>([])
+  const [assigneesOpen, setAssigneesOpen] = useState(false)
+  const [assigneesSaving, setAssigneesSaving] = useState(false)
+  const [assigneesError, setAssigneesError] = useState<string | null>(null)
+  const [emailsSent, setEmailsSent] = useState(false)
+  const [sendBusy, setSendBusy] = useState(false)
+  const [pdfHash, setPdfHash] = useState<string | null>(null)
+  const [pdfBusy, setPdfBusy] = useState(false)
+  const [sealed, setSealed] = useState(false)
+  const [sealCheck, setSealCheck] = useState<SealCheck | null>(null)
+  const [sealBusy, setSealBusy] = useState(false)
+  const [sealError, setSealError] = useState<string | null>(null)
+  const [lockConfirmOpen, setLockConfirmOpen] = useState(false)
   const docRef = useRef<Y.Doc | null>(null)
   const remoteEdit = useRef(false)
+  const lockedRef = useRef(false)
   const [pickerAfterId, setPickerAfterId] = useState<string | null>(null)
   const [selectedChunkId, setSelectedChunkId] = useState<string | null>(null)
   const [cogMenuId, setCogMenuId] = useState<string | null>(null)
@@ -71,9 +106,55 @@ export default function PageEditor() {
   )
 
   useEffect(() => {
+    lockedRef.current = locked
+  }, [locked])
+
+  useEffect(() => {
+    if (!pageId || !sealed) {
+      setSealCheck(null)
+      setSealError(null)
+      setSealBusy(false)
+      return
+    }
+
+    let cancel = false
+    setSealBusy(true)
+    setSealError(null)
+    verifyPageSeal(pageId, getAccessToken)
+      .then((result) => {
+        if (!cancel) {
+          setSealCheck(result)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancel) {
+          setSealError(err instanceof Error ? err.message : 'Could not check the seal')
+        }
+      })
+      .finally(() => {
+        if (!cancel) {
+          setSealBusy(false)
+        }
+      })
+    return () => {
+      cancel = true
+    }
+  }, [pageId, sealed, getAccessToken])
+
+  useEffect(() => {
     if (!pageId) {
       setTitle(DEFAULT_TITLE)
       setChunks(STARTING_CHUNKS)
+      setLocked(false)
+      setContentHash(null)
+      setIntegrity('idle')
+      setAssignees([])
+      setAssigneesOpen(false)
+      setAssigneesError(null)
+      setEmailsSent(false)
+      setSealed(false)
+      setSealCheck(null)
+      setSealError(null)
       setLoadError(null)
       setReady(true)
       setLive(false)
@@ -85,6 +166,17 @@ export default function PageEditor() {
     docRef.current = doc
     setReady(false)
     setLive(false)
+    setLocked(false)
+    setContentHash(null)
+    setIntegrity('idle')
+    setAssignees([])
+    setAssigneesOpen(false)
+    setAssigneesError(null)
+    setEmailsSent(false)
+    setPdfHash(null)
+    setSealed(false)
+    setSealCheck(null)
+    setSealError(null)
     setLoadError(null)
 
     const id = pageId
@@ -98,6 +190,12 @@ export default function PageEditor() {
       remoteEdit.current = true
       setTitle(page.title)
       setChunks(page.chunks)
+      if (lockedRef.current && !page.locked) {
+        writeLocked(doc, true)
+        setLocked(true)
+      } else {
+        setLocked(page.locked)
+      }
       setReady(true)
       setLive(true)
     }
@@ -114,6 +212,31 @@ export default function PageEditor() {
       if (cancel) {
         return
       }
+      // Postgres is source of truth for lock; Yjs keeps collaborators in sync.
+      try {
+        const saved = await fetchPage(id, getAccessToken)
+        if (!cancel) {
+          lockedRef.current = saved.locked
+          setLocked(saved.locked)
+          setContentHash(saved.content_hash)
+          setEmailsSent(saved.emails_sent)
+          setPdfHash(saved.pdf_hash)
+          setSealed(saved.sealed)
+          setIntegrity('idle')
+        }
+        try {
+          const savedAssignees = await fetchAssignees(id, getAccessToken)
+          if (!cancel) {
+            setAssignees(savedAssignees)
+          }
+        } catch {
+          if (!cancel) {
+            setAssignees([])
+          }
+        }
+      } catch {
+        // Collab can still open; lock UI falls back to Yjs meta.
+      }
       const { serverUrl, room } = pageCollabUrl(id)
       provider = new WebsocketProvider(serverUrl, room, doc, {
         connect: true,
@@ -123,6 +246,9 @@ export default function PageEditor() {
       provider.on('sync', (synced: boolean) => {
         if (synced) {
           publish()
+          if (lockedRef.current) {
+            writeLocked(doc, true)
+          }
         }
       })
       provider.on('connection-close', (event: CloseEvent | null) => {
@@ -155,7 +281,7 @@ export default function PageEditor() {
   }, [pageId, getAccessToken])
 
   useEffect(() => {
-    if (!live) {
+    if (!live || locked) {
       return
     }
     const doc = docRef.current
@@ -167,10 +293,122 @@ export default function PageEditor() {
       return
     }
     writePage(doc, title, chunks)
-  }, [live, title, chunks])
+  }, [live, locked, title, chunks])
+
+  function requestLock() {
+    if (!pageId) {
+      setSaveError('Save the page before locking so the hash can be stored in the database.')
+      return
+    }
+    setSaveError(null)
+    setLockConfirmOpen(true)
+  }
+
+  async function confirmLock() {
+    if (!pageId || locked) {
+      return
+    }
+
+    setCogMenuId(null)
+    setSelectedChunkId(null)
+    setPickerAfterId(null)
+    setSaveError(null)
+    setIntegrity('idle')
+    setLockBusy(true)
+
+    try {
+      const lockedPage = await lockPage(
+        pageId,
+        { title: title.trim() || DEFAULT_TITLE, chunks },
+        getAccessToken,
+      )
+      lockedRef.current = true
+      setLocked(true)
+      setContentHash(lockedPage.content_hash)
+      setPdfHash(lockedPage.pdf_hash)
+      setLockConfirmOpen(false)
+      const doc = docRef.current
+      if (live && doc) {
+        writeLocked(doc, true)
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not lock page')
+    } finally {
+      setLockBusy(false)
+    }
+  }
+
+  async function handleMarkSent() {
+    if (!pageId || !locked || assignees.length === 0 || emailsSent) {
+      return
+    }
+    setSendBusy(true)
+    setSaveError(null)
+    try {
+      const sent = await markPageSent(pageId, getAccessToken)
+      setEmailsSent(sent.emails_sent)
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not mark page as sent')
+    } finally {
+      setSendBusy(false)
+    }
+  }
+
+  async function checkIntegrity() {
+    if (!pageId) {
+      return
+    }
+    setIntegrity('checking')
+    setSaveError(null)
+    try {
+      const result = await verifyPageIntegrity(pageId, getAccessToken)
+      setContentHash(result.content_hash)
+      setIntegrity(result.matches ? 'ok' : 'mismatch')
+    } catch (err) {
+      setIntegrity('error')
+      setSaveError(err instanceof Error ? err.message : 'Could not verify page integrity')
+    }
+  }
+
+  async function handleDownloadPdf() {
+    if (!pageId || !locked) {
+      return
+    }
+    setPdfBusy(true)
+    setSaveError(null)
+    try {
+      const safe = (title.trim() || DEFAULT_TITLE).replace(/[^\w.\-]+/g, '_').slice(0, 80)
+      await downloadPagePdf(pageId, getAccessToken, `${safe || 'page'}.pdf`)
+      if (!pdfHash) {
+        const refreshed = await fetchPage(pageId, getAccessToken)
+        setPdfHash(refreshed.pdf_hash)
+      }
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : 'Could not download PDF')
+    } finally {
+      setPdfBusy(false)
+    }
+  }
+
+  async function handleSaveAssignees(next: AssigneeWrite[]) {
+    if (!pageId) {
+      return
+    }
+    setAssigneesSaving(true)
+    setAssigneesError(null)
+    try {
+      const saved = await saveAssignees(pageId, next, getAccessToken)
+      setAssignees(saved)
+      setAssigneesOpen(false)
+    } catch (err) {
+      setAssigneesError(err instanceof Error ? err.message : 'Could not save assignees')
+    } finally {
+      setAssigneesSaving(false)
+    }
+  }
 
   async function savePage() {
-    if (pageId) {
+    if (pageId || locked) {
       return
     }
     setSaving(true)
@@ -188,6 +426,9 @@ export default function PageEditor() {
   }
 
   function handleDragEnd(event: DragEndEvent) {
+    if (locked) {
+      return
+    }
     const { active, over } = event
     if (!over || active.id === over.id) {
       return
@@ -217,14 +458,23 @@ export default function PageEditor() {
   }
 
   function updateChunk(next: Chunk) {
+    if (locked) {
+      return
+    }
     setChunks((current) => current.map((chunk) => (chunk.id === next.id ? next : chunk)))
   }
 
   function togglePicker(afterId: string) {
+    if (locked) {
+      return
+    }
     setPickerAfterId((current) => (current === afterId ? null : afterId))
   }
 
   function addChunk(type: ChunkType) {
+    if (locked) {
+      return
+    }
     setChunks((current) => {
       const added = [...current, blankChunk(type)]
       if (!pickerAfterId || pickerAfterId === PAGE_END) {
@@ -240,6 +490,9 @@ export default function PageEditor() {
   }
 
   function selectChunk(id: string | null) {
+    if (locked) {
+      return
+    }
     setSelectedChunkId(id)
     if (id === null) {
       setCogMenuId(null)
@@ -247,6 +500,9 @@ export default function PageEditor() {
   }
 
   function deleteChunk(id: string) {
+    if (locked) {
+      return
+    }
     setChunks((current) => current.filter((chunk) => chunk.id !== id))
     setSelectedChunkId(null)
     setCogMenuId(null)
@@ -274,36 +530,149 @@ export default function PageEditor() {
   }, [pickerAfterId, cogMenuId])
 
   return (
-    <div className="workspace">
+    <div className={locked ? 'workspace workspace-locked' : 'workspace'}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <div className="editor-shell">
           <div className="editor-main">
             <div className="page-heading">
               <button type="button" className="page-back" onClick={() => navigate('/')}>
-                Pages
+                Documents
               </button>
               <input
                 className="page-title"
                 aria-label="Page title"
                 value={title}
-                disabled={Boolean(pageId) && !ready}
+                disabled={locked || (Boolean(pageId) && !ready)}
                 onChange={(event) => setTitle(event.target.value)}
               />
+              {locked ? (
+                <span className="page-locked-badge">Locked</span>
+              ) : (
+                <button
+                  type="button"
+                  className="page-lock"
+                  onClick={requestLock}
+                  disabled={lockBusy || !pageId || !ready}
+                  title={pageId ? undefined : 'Save the page before locking'}
+                >
+                  Lock
+                </button>
+              )}
+              <button
+                type="button"
+                className="page-assignees"
+                onClick={() => {
+                  setAssigneesError(null)
+                  setAssigneesOpen(true)
+                }}
+                disabled={!locked || !pageId}
+                title={locked ? undefined : 'Lock the page before adding assignees'}
+              >
+                Assignees{assignees.length > 0 ? ` (${assignees.length})` : ''}
+              </button>
+              <button
+                type="button"
+                className="page-send"
+                onClick={() => void handleMarkSent()}
+                disabled={!locked || !pageId || assignees.length === 0 || emailsSent || sendBusy}
+                title={
+                  emailsSent
+                    ? 'Already marked as sent'
+                    : assignees.length === 0
+                      ? 'Add assignees before sending'
+                      : 'Mark as sent for signature (no email yet)'
+                }
+              >
+                {emailsSent ? 'Sent' : sendBusy ? 'Sending…' : 'Send for signature'}
+              </button>
+              <button
+                type="button"
+                className="page-pdf"
+                onClick={() => void handleDownloadPdf()}
+                disabled={!locked || !pageId || pdfBusy}
+                title={locked ? undefined : 'Lock the page before downloading a PDF'}
+              >
+                {pdfBusy ? 'Preparing PDF…' : 'Download PDF'}
+              </button>
               <button
                 type="button"
                 className="page-save"
                 onClick={() => void savePage()}
-                disabled={!ready || saving || Boolean(pageId)}
+                disabled={locked || !ready || saving || Boolean(pageId)}
               >
                 {pageId ? (live ? 'Live' : 'Connecting') : saving ? 'Saving' : 'Save'}
               </button>
             </div>
+            <ConfirmLockModal
+              open={lockConfirmOpen}
+              busy={lockBusy}
+              onClose={() => {
+                if (!lockBusy) {
+                  setLockConfirmOpen(false)
+                }
+              }}
+              onConfirm={() => void confirmLock()}
+            />
+            <AssigneesModal
+              open={assigneesOpen}
+              initial={assignees}
+              saving={assigneesSaving}
+              error={assigneesError}
+              onClose={() => {
+                if (!assigneesSaving) {
+                  setAssigneesOpen(false)
+                  setAssigneesError(null)
+                }
+              }}
+              onSave={(next) => void handleSaveAssignees(next)}
+            />
+            {locked ? (
+              <div className="page-lock-banner" role="status">
+                <p>This page is locked. Anyone can view it, but it can’t be edited.</p>
+                {contentHash ? (
+                  <p className="page-lock-hash">
+                    <span className="page-lock-hash-label">Content SHA-256</span>
+                    <code>{contentHash}</code>
+                  </p>
+                ) : null}
+                {pdfHash ? (
+                  <p className="page-lock-hash">
+                    <span className="page-lock-hash-label">PDF SHA-256</span>
+                    <code>{pdfHash}</code>
+                  </p>
+                ) : null}
+                {sealed ? <SealPanel check={sealCheck} busy={sealBusy} error={sealError} /> : null}
+                <div className="page-lock-actions">
+                  <button
+                    type="button"
+                    className="page-verify"
+                    onClick={() => void checkIntegrity()}
+                    disabled={!pageId || integrity === 'checking'}
+                  >
+                    {integrity === 'checking' ? 'Verifying…' : 'Verify integrity'}
+                  </button>
+                  {integrity === 'ok' ? (
+                    <span className="page-integrity page-integrity-ok">Snapshot matches the stored hash</span>
+                  ) : null}
+                  {integrity === 'mismatch' ? (
+                    <span className="page-integrity page-integrity-bad">
+                      Snapshot does not match the stored hash
+                    </span>
+                  ) : null}
+                  {integrity === 'error' ? (
+                    <span className="page-integrity page-integrity-bad">Verification failed</span>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
             {loadError ? <p className="page-message page-message-error">{loadError}</p> : null}
             {pageId && !ready && !loadError ? <p className="page-message">Connecting…</p> : null}
             {saveError ? <p className="page-message page-message-error">{saveError}</p> : null}
             {!pageId || ready ? (
               <>
-            <p className="workspace-note">Drag a block by its handle, or drag Text field onto a block.</p>
+            {locked ? null : (
+              <p className="workspace-note">Drag a block by its handle, or drag Text field onto a block.</p>
+            )}
             <article className="doc-page">
               <SortableContext items={chunks.map((chunk) => chunk.id)} strategy={verticalListSortingStrategy}>
                 <ul className="chunk-list">
@@ -311,9 +680,10 @@ export default function PageEditor() {
                     <ChunkBlock
                       key={chunk.id}
                       chunk={chunk}
-                      selected={selectedChunkId === chunk.id}
-                      menuOpen={cogMenuId === chunk.id}
-                      addOpen={pickerAfterId === chunk.id}
+                      readOnly={locked}
+                      selected={!locked && selectedChunkId === chunk.id}
+                      menuOpen={!locked && cogMenuId === chunk.id}
+                      addOpen={!locked && pickerAfterId === chunk.id}
                       onChange={updateChunk}
                       onSelect={selectChunk}
                       onToggleMenu={() => setCogMenuId((current) => (current === chunk.id ? null : chunk.id))}
@@ -325,24 +695,28 @@ export default function PageEditor() {
                   ))}
                 </ul>
               </SortableContext>
-              <AddChunkButton
-                open={pickerAfterId === PAGE_END}
-                onToggle={() => togglePicker(PAGE_END)}
-                onAdd={addChunk}
-                onClose={() => setPickerAfterId(null)}
-              />
+              {locked ? null : (
+                <AddChunkButton
+                  open={pickerAfterId === PAGE_END}
+                  onToggle={() => togglePicker(PAGE_END)}
+                  onAdd={addChunk}
+                  onClose={() => setPickerAfterId(null)}
+                />
+              )}
             </article>
               </>
             ) : null}
           </div>
-          <aside className="field-rail">
-            <h2>Add fillable fields</h2>
-            <div className="field-list">
-              <PaletteChip id={NEW_TEXT_FIELD_ID} label="Text field" icon={Type} />
-              <PaletteChip id={NEW_SIGNATURE_ID} label="Signature" icon={PenLine} />
-              <PaletteChip id={NEW_DATE_ID} label="Date" icon={Calendar} />
-            </div>
-          </aside>
+          {locked ? null : (
+            <aside className="field-rail">
+              <h2>Add fillable fields</h2>
+              <div className="field-list">
+                <PaletteChip id={NEW_TEXT_FIELD_ID} label="Text field" icon={Type} />
+                <PaletteChip id={NEW_SIGNATURE_ID} label="Signature" icon={PenLine} />
+                <PaletteChip id={NEW_DATE_ID} label="Date" icon={Calendar} />
+              </div>
+            </aside>
+          )}
         </div>
       </DndContext>
     </div>
@@ -379,6 +753,7 @@ function blankChunk(type: ChunkType): Chunk {
 
 type ChunkBlockProps = {
   chunk: Chunk
+  readOnly: boolean
   selected: boolean
   menuOpen: boolean
   addOpen: boolean
@@ -393,6 +768,7 @@ type ChunkBlockProps = {
 
 function ChunkBlock({
   chunk,
+  readOnly,
   selected,
   menuOpen,
   addOpen,
@@ -405,7 +781,7 @@ function ChunkBlock({
   onCloseAdd,
 }: ChunkBlockProps) {
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
-    useSortable({ id: chunk.id })
+    useSortable({ id: chunk.id, disabled: readOnly })
 
   const style = {
     transform: CSS.Transform.toString(transform),
@@ -429,26 +805,38 @@ function ChunkBlock({
       onFocus={() => onSelect(chunk.id)}
       onBlur={handleBlur}
     >
-      <button
-        type="button"
-        className="chunk-handle"
-        aria-label="Drag to reorder"
-        ref={setActivatorNodeRef}
-        {...attributes}
-        {...listeners}
-      >
-        ::
-      </button>
+      {readOnly ? null : (
+        <button
+          type="button"
+          className="chunk-handle"
+          aria-label="Drag to reorder"
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+        >
+          ::
+        </button>
+      )}
       <div className="chunk-body" tabIndex={-1}>
-        {chunk.type === 'text' ? <TextBlock chunk={chunk} onChange={onChange} /> : null}
-        {chunk.type === 'image' ? <ImageBlock chunk={chunk} onChange={onChange} /> : null}
-        {chunk.type === 'video' ? <VideoBlock chunk={chunk} onChange={onChange} /> : null}
-        {chunk.type === 'table' ? <TableBlock chunk={chunk} onChange={onChange} /> : null}
+        {chunk.type === 'text' ? <TextBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
+        {chunk.type === 'image' ? <ImageBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
+        {chunk.type === 'video' ? <VideoBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
+        {chunk.type === 'table' ? <TableBlock chunk={chunk} onChange={onChange} readOnly={readOnly} /> : null}
         {chunk.type === 'signature' ? (
-          <SignatureBlock chunk={chunk} onChange={onChange} onPress={() => onSelect(chunk.id)} />
+          <SignatureBlock
+            chunk={chunk}
+            onChange={onChange}
+            onPress={() => onSelect(chunk.id)}
+            readOnly={readOnly}
+          />
         ) : null}
         {chunk.type === 'date' ? (
-          <DateBlock chunk={chunk} onChange={onChange} onPress={() => onSelect(chunk.id)} />
+          <DateBlock
+            chunk={chunk}
+            onChange={onChange}
+            onPress={() => onSelect(chunk.id)}
+            readOnly={readOnly}
+          />
         ) : null}
         {selected ? (
           <button type="button" className="chunk-cog" aria-label="Block settings" aria-expanded={menuOpen} onClick={onToggleMenu}>
@@ -457,12 +845,14 @@ function ChunkBlock({
         ) : null}
         {menuOpen ? <BlockMenu onDelete={onDelete} /> : null}
       </div>
-      <AddChunkButton
-        open={addOpen}
-        onToggle={onToggleAdd}
-        onAdd={onAdd}
-        onClose={onCloseAdd}
-      />
+      {readOnly ? null : (
+        <AddChunkButton
+          open={addOpen}
+          onToggle={onToggleAdd}
+          onAdd={onAdd}
+          onClose={onCloseAdd}
+        />
+      )}
     </li>
   )
 }

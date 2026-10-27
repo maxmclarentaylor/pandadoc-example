@@ -1,6 +1,9 @@
 import { BrowserRouter, Route, Routes } from 'react-router'
 import PageEditor from './PageEditor'
 import FileList from './pages/FileList'
+import Downloads from './pages/Downloads'
+import PagesToSign from './pages/PagesToSign'
+import SignPageView from './pages/SignPageView'
 
 export default function App() {
   return (
@@ -9,6 +12,9 @@ export default function App() {
         <Route path="/" element={<FileList />} />
         <Route path="/pages/new" element={<PageEditor />} />
         <Route path="/pages/:pageId" element={<PageEditor />} />
+        <Route path="/pages-to-sign" element={<PagesToSign />} />
+        <Route path="/downloads" element={<Downloads />} />
+        <Route path="/pages-to-sign/:pageId" element={<SignPageView />} />
       </Routes>
     </BrowserRouter>
   )

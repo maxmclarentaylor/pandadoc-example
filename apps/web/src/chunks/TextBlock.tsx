@@ -4,9 +4,10 @@ import type { ChunkChange, TextChunk } from './types'
 type TextBlockProps = {
   chunk: TextChunk
   onChange: ChunkChange
+  readOnly?: boolean
 }
 
-export default function TextBlock({ chunk, onChange }: TextBlockProps) {
+export default function TextBlock({ chunk, onChange, readOnly = false }: TextBlockProps) {
   const ref = useRef<HTMLTextAreaElement>(null)
 
   useLayoutEffect(() => {
@@ -24,6 +25,7 @@ export default function TextBlock({ chunk, onChange }: TextBlockProps) {
       value={chunk.text}
       rows={1}
       placeholder="Text"
+      readOnly={readOnly}
       onChange={(event) => onChange({ ...chunk, text: event.target.value })}
     />
   )

@@ -109,6 +109,9 @@ def save_snapshot(page_id: str, title: str, chunks: list[dict[str, Any]], state:
         page = db.get(Page, page_id)
         if page is None:
             return
+        # Locked pages keep their frozen Postgres snapshot; ignore collab writes.
+        if page.locked:
+            return
         page.title = title.strip() or "Untitled"
         page.chunks = chunks
         page.y_state = state

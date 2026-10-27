@@ -8,6 +8,7 @@ type DateBlockProps = {
   chunk: DateChunk
   onChange: ChunkChange
   onPress: () => void
+  readOnly?: boolean
 }
 
 function parseValue(value: string) {
@@ -40,12 +41,18 @@ function formatLabel(value: string) {
   return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric' }).format(date)
 }
 
-export default function DateBlock({ chunk, onChange, onPress }: DateBlockProps) {
+export default function DateBlock({ chunk, onChange, onPress, readOnly = false }: DateBlockProps) {
   const rootRef = useRef<HTMLDivElement>(null)
   const buttonRef = useRef<HTMLButtonElement>(null)
   const popoverRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const selected = parseValue(chunk.value)
+
+  useEffect(() => {
+    if (readOnly) {
+      setOpen(false)
+    }
+  }, [readOnly])
 
   useLayoutEffect(() => {
     if (!open) {
@@ -107,12 +114,17 @@ export default function DateBlock({ chunk, onChange, onPress }: DateBlockProps) 
         ref={buttonRef}
         aria-expanded={open}
         aria-haspopup="dialog"
-        onClick={() => setOpen((current) => !current)}
+        disabled={readOnly}
+        onClick={() => {
+          if (!readOnly) {
+            setOpen((current) => !current)
+          }
+        }}
       >
         <Calendar aria-hidden strokeWidth={1.75} />
         <span>{formatLabel(chunk.value)}</span>
       </button>
-      {open ? (
+      {open && !readOnly ? (
         <div className="date-popover" ref={popoverRef} role="dialog" aria-label="Choose a date">
           <DayPicker
             mode="single"

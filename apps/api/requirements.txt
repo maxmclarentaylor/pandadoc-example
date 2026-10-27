@@ -10,3 +10,6 @@ azure-monitor-opentelemetry==1.8.1
 httpx==0.28.1
 pycrdt==0.14.8
 pycrdt-websocket==0.16.5
+resend==2.50.0
+weasyprint==66.0
+pyhanko==0.29.1
