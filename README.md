@@ -8,10 +8,14 @@ Open the website: https://red-island-0d916eb03.5.azurestaticapps.net
 
 If you are running it on your computer, open http://127.0.0.1:5173 instead.
 
-A Microsoft sign-in box will appear. Use one of these practice accounts. The password for both is `ChooseAStrongPassword1!`.
+A Microsoft sign-in box will appear. Sign in with the email and password only. For this demo, two-factor authentication has been removed, so it will not ask for an authenticator app or a second code.
 
-- Editor One: `editor1@maxmclarentayloroutlook.onmicrosoft.com`
-- Editor Two: `editor2@maxmclarentayloroutlook.onmicrosoft.com`
+Both accounts use the same password: `ChooseAStrongPassword1!`
+
+| Who | Email | Password |
+| --- | --- | --- |
+| Editor One | `editor1@maxmclarentayloroutlook.onmicrosoft.com` | `ChooseAStrongPassword1!` |
+| Editor Two | `editor2@maxmclarentayloroutlook.onmicrosoft.com` | `ChooseAStrongPassword1!` |
 
 Two different people have to sign. Use a private window for the second person, so the first person stays signed in.
 
