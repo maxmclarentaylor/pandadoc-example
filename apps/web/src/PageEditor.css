@@ -1,7 +1,7 @@
 .workspace {
-  min-height: 100vh;
-  padding: 2.5rem 1.5rem 4rem;
-  background: #eceff3;
+  min-height: calc(100vh - 56px);
+  padding: 1.75rem 1.5rem 4rem;
+  background: transparent;
 }
 
 .editor-shell {
@@ -30,29 +30,31 @@
 
 .page-back {
   padding: 0.45rem 0.7rem;
-  border: 1px solid #e6e8ec;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
-  color: #3f3f46;
+  background: var(--panel);
+  color: var(--muted);
 }
 
 .page-title {
   flex: 1;
   min-width: 0;
-  padding: 0.5rem 0.75rem;
-  border: 1px solid #e6e8ec;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
-  color: #1c1c1c;
-  font-size: 1rem;
-  font-weight: 600;
+  background: var(--panel);
+  color: var(--ink);
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 1.15rem;
+  font-weight: 550;
+  letter-spacing: -0.02em;
 }
 
 .page-save {
-  padding: 0.5rem 0.9rem;
+  padding: 0.5rem 0.95rem;
   border: 0;
   border-radius: 8px;
-  background: #1f7a4d;
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
 }
@@ -67,10 +69,10 @@
 .page-send,
 .page-pdf {
   padding: 0.5rem 0.9rem;
-  border: 1px solid #d4d4d8;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
-  color: #3f3f46;
+  background: var(--panel);
+  color: var(--ink);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
@@ -87,8 +89,8 @@
 }
 
 .page-send {
-  border-color: #1f7a4d;
-  color: #1f7a4d;
+  border-color: #cfe3d6;
+  color: var(--accent-deep);
 }
 
 .page-lock:disabled,
@@ -154,7 +156,7 @@
 
 .lock-confirm-confirm {
   border: 0;
-  background: #1f7a4d;
+  background: var(--accent);
   color: #fff;
 }
 
@@ -340,12 +342,14 @@
 
 .page-lock-banner {
   margin: 0 0 0.85rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #e4e4e7;
-  border-radius: 8px;
-  background: #fafafa;
-  color: #52525b;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  background: var(--panel);
+  color: #4e4943;
   font-size: 0.9rem;
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.03);
 }
 
 .page-lock-banner > p {
@@ -445,10 +449,10 @@
   flex: none;
   margin-top: 2rem;
   padding: 1rem 0.85rem;
-  background: #fff;
-  border: 1px solid #e6e8ec;
-  border-radius: 12px;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.04);
 }
 
 .field-list {
@@ -497,10 +501,9 @@
   margin: 0 auto;
   padding: 4.5rem 5rem;
   background: #fff;
-  border: 1px solid #e6e8ec;
-  box-shadow:
-    0 1px 2px rgba(15, 23, 42, 0.04),
-    0 16px 40px rgba(15, 23, 42, 0.08);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  box-shadow: var(--shadow);
 }
 
 .chunk-list {

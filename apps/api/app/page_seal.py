@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from io import BytesIO
 from pathlib import Path
@@ -27,6 +28,57 @@ _DEFAULT_DIR = _API_ROOT / "var" / "seal"
 
 class SealError(Exception):
     """The PDF could not be sealed."""
+
+
+@dataclass(frozen=True)
+class SealInspection:
+    intact: bool
+    field_name: str | None
+    certificate_name: str | None
+    self_signed: bool
+
+
+def inspect_seal(pdf: bytes) -> SealInspection:
+    """Check the embedded signature against the public key stored inside the PDF."""
+    from pyhanko.pdf_utils.reader import PdfFileReader
+    from pyhanko.sign.validation import validate_pdf_signature
+    from pyhanko_certvalidator import ValidationContext
+
+    reader = PdfFileReader(BytesIO(pdf))
+    if not reader.embedded_signatures:
+        raise SealError("PDF has no digital signature")
+    signature = reader.embedded_signatures[0]
+    certificate = signature.signer_cert
+    certificate_name = _common_name(certificate.subject) if certificate is not None else None
+    self_signed = bool(
+        certificate is not None and certificate.subject.dump() == certificate.issuer.dump()
+    )
+    try:
+        status = validate_pdf_signature(
+            signature,
+            ValidationContext(allow_fetching=False),
+        )
+    except Exception as exc:
+        raise SealError(str(exc)) from exc
+    field_name = signature.field_name
+    return SealInspection(
+        intact=bool(status.intact),
+        field_name=str(field_name) if field_name else None,
+        certificate_name=certificate_name,
+        self_signed=self_signed,
+    )
+
+
+def _common_name(name: object) -> str | None:
+    native = getattr(name, "native", None)
+    if not isinstance(native, dict):
+        return None
+    value = native.get("common_name")
+    if isinstance(value, list):
+        return str(value[0]) if value else None
+    if value is None:
+        return None
+    return str(value)
 
 
 def seal_pdf(pdf: bytes) -> bytes:

@@ -45,6 +45,17 @@ class PageOut(BaseModel):
     has_pdf: bool = False
 
 
+class SealCheckOut(BaseModel):
+    """Result of checking the signature embedded in the stored PDF."""
+
+    id: str
+    intact: bool
+    field_name: str | None
+    certificate_name: str | None
+    self_signed: bool
+    sealed_at: datetime | None
+
+
 class PageIntegrityOut(BaseModel):
     """Re-hash the frozen snapshot and compare to the stored fingerprint."""
 

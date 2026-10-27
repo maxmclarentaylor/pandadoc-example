@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { fetchMe, fetchPagesToSign, type PageSummary } from '../api'
 import { useAuth } from '../AuthContext'
+import ListTabs from './ListTabs'
 import './FileList.css'
 
 export default function PagesToSign() {
@@ -50,13 +51,9 @@ export default function PagesToSign() {
   return (
     <main className="file-list">
       <header className="file-list-header">
-        <div className="file-list-heading">
-          <button type="button" className="file-list-nav" onClick={() => navigate('/')}>
-            Pages
-          </button>
-          <h1>Pages to sign</h1>
-        </div>
+        <h1>Pages to sign</h1>
       </header>
+      <ListTabs active="sign" />
       <p className="file-list-status">
         Locked pages that have been marked as sent. Viewing only — no editing here.
       </p>
@@ -80,7 +77,8 @@ export default function PagesToSign() {
                 className="file-list-item"
                 onClick={() => navigate(`/pages-to-sign/${page.id}`)}
               >
-                {page.title}
+                <span className="file-list-title">{page.title}</span>
+                {page.signing_complete ? <span className="file-list-signed">Document already signed</span> : null}
               </button>
             </li>
           ))}

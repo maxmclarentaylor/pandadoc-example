@@ -223,6 +223,20 @@ export function lockPage(
   return apiPost<PageDocument>(`/v1/pages/${pageId}/lock`, body, getAccessToken)
 }
 
+export type SealCheck = {
+  id: string
+  intact: boolean
+  field_name: string | null
+  certificate_name: string | null
+  self_signed: boolean
+  sealed_at: string | null
+}
+
+/** Check the signature embedded in a sealed page PDF. */
+export function verifyPageSeal(pageId: string, getAccessToken: GetAccessToken): Promise<SealCheck> {
+  return apiGet<SealCheck>(`/v1/pages/${pageId}/seal`, getAccessToken)
+}
+
 /** Download the frozen PDF for a locked page. */
 export async function downloadPagePdf(
   pageId: string,

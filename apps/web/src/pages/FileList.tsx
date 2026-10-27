@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router'
 import { Trash2 } from 'lucide-react'
 import { deletePage, fetchMe, fetchPages, type PageSummary } from '../api'
 import { useAuth } from '../AuthContext'
+import ListTabs from './ListTabs'
 import './FileList.css'
 
 export default function FileList() {
@@ -65,31 +66,28 @@ export default function FileList() {
   return (
     <main className="file-list">
       <header className="file-list-header">
-        <h1>Pages</h1>
-        <div className="file-list-actions">
-          <button type="button" className="file-list-secondary" onClick={() => navigate('/pages-to-sign')}>
-            Pages to sign
-          </button>
-          <button type="button" className="file-list-create" onClick={() => navigate('/pages/new')}>
-            New page
-          </button>
-        </div>
+        <h1>Documents</h1>
+        <button type="button" className="file-list-create" onClick={() => navigate('/pages/new')}>
+          New page
+        </button>
       </header>
-      {loading ? <p className="file-list-status">Loading pages…</p> : null}
+      <ListTabs active="documents" />
+      {loading ? <p className="file-list-status">Loading documents…</p> : null}
       {error ? (
         <p className="file-list-error" role="alert">
           {error}
         </p>
       ) : null}
       {!loading && !error && pages.length === 0 ? (
-        <p className="file-list-status">No pages yet. Create one to start a document.</p>
+        <p className="file-list-status">No documents yet. Create one to start.</p>
       ) : null}
       {pages.length > 0 ? (
         <ul className="file-list-items">
           {pages.map((page) => (
             <li key={page.id} className="file-list-row">
               <button type="button" className="file-list-item" onClick={() => navigate(`/pages/${page.id}`)}>
-                {page.title}
+                <span className="file-list-title">{page.title}</span>
+                {page.locked ? <span className="file-list-locked">Locked</span> : null}
               </button>
               <button
                 type="button"

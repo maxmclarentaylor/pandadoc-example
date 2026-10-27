@@ -1,5 +1,6 @@
 """The request that finishes signing seals the PDF before it commits."""
 
+from datetime import datetime, timezone
 from io import BytesIO
 
 from asn1crypto import x509 as asn1_x509
@@ -12,7 +13,8 @@ from pyhanko_certvalidator import ValidationContext
 from app.auth import require_entra_user
 from app.main import app
 from app.models import Page
-from app.page_seal import seal_pdf
+from app.page_pdf import CompletionRecord, CompletionSigner, page_to_html
+from app.page_seal import inspect_seal, seal_pdf
 
 
 def _minimal_pdf() -> bytes:
@@ -65,6 +67,32 @@ def test_seal_pdf_signs_rendered_bytes(monkeypatch, tmp_path):
     )
     assert signature_status.intact
     assert signature_status.valid
+    inspection = inspect_seal(sealed)
+    assert inspection.intact
+    assert inspection.field_name == "PageSeal"
+    assert inspection.certificate_name == "segment-practice page seal"
+    assert inspection.self_signed is True
+
+
+def test_completion_page_records_signers():
+    sealed_at = datetime(2026, 10, 26, 16, 20, tzinfo=timezone.utc)
+    signed_at = datetime(2026, 10, 26, 16, 5, tzinfo=timezone.utc)
+    html = page_to_html(
+        "Contract",
+        [{"id": "c1", "type": "text", "text": "Terms"}],
+        CompletionRecord(
+            content_hash="abc123",
+            sealed_at=sealed_at,
+            signers=[CompletionSigner(name="Ada Lovelace", email="ada@example.com", signed_at=signed_at)],
+        ),
+    )
+    assert "Completion certificate" in html
+    assert "abc123" in html
+    assert "Ada Lovelace" in html
+    assert "ada@example.com" in html
+    assert "2026-10-26 16:05 UTC" in html
+    assert "2026-10-26 16:20 UTC" in html
+    assert "self-signed for the demo" in html
 
 
 def _claims(upn: str):

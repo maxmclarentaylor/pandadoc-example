@@ -4,20 +4,44 @@ from __future__ import annotations
 
 import hashlib
 import logging
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from html import escape
 from typing import Any
 
 log = logging.getLogger(__name__)
 
 
+@dataclass(frozen=True)
+class CompletionSigner:
+    name: str
+    email: str
+    signed_at: datetime | None
+
+
+@dataclass(frozen=True)
+class CompletionRecord:
+    """Audit page appended before the PDF is sealed."""
+
+    content_hash: str
+    sealed_at: datetime
+    signers: list[CompletionSigner]
+
+
 def pdf_sha256(pdf: bytes) -> str:
     return hashlib.sha256(pdf).hexdigest()
 
 
-def page_to_html(title: str, chunks: list[dict[str, Any]]) -> str:
+def page_to_html(
+    title: str,
+    chunks: list[dict[str, Any]],
+    completion: CompletionRecord | None = None,
+) -> str:
     parts = [f"<h1>{escape(title.strip() or 'Untitled')}</h1>"]
     for chunk in chunks:
         parts.append(_chunk_html(chunk))
+    if completion is not None:
+        parts.append(_completion_html(title, completion))
     body = "\n".join(parts)
     return f"""<!DOCTYPE html>
 <html lang="en">
@@ -69,6 +93,17 @@ def page_to_html(title: str, chunks: list[dict[str, Any]]) -> str:
       color: #a1a1aa;
       margin: 0 0 1em;
     }}
+    .completion {{
+      page-break-before: always;
+    }}
+    .completion h2 {{
+      font-size: 16pt;
+      margin: 0 0 0.6em;
+    }}
+    .completion .note {{
+      color: #3f3f46;
+      font-size: 10pt;
+    }}
   </style>
 </head>
 <body>
@@ -118,10 +153,48 @@ def _chunk_html(chunk: dict[str, Any]) -> str:
     return ""
 
 
-def render_page_pdf(title: str, chunks: list[dict[str, Any]]) -> bytes:
+def _format_utc(value: datetime | None) -> str:
+    if value is None:
+        return "—"
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+
+
+def _completion_html(title: str, completion: CompletionRecord) -> str:
+    rows = []
+    for signer in completion.signers:
+        rows.append(
+            "<tr>"
+            f"<td>{escape(signer.name)}</td>"
+            f"<td>{escape(signer.email)}</td>"
+            f"<td>{escape(_format_utc(signer.signed_at))}</td>"
+            "</tr>"
+        )
+    body = "".join(rows) or "<tr><td colspan=\"3\">—</td></tr>"
+    return f"""<section class="completion">
+<h2>Completion certificate</h2>
+<p>Document: {escape(title.strip() or "Untitled")}</p>
+<p>Content SHA-256</p>
+<p>{escape(completion.content_hash)}</p>
+<p>Sealed: {escape(_format_utc(completion.sealed_at))}</p>
+<table>
+<thead><tr><th>Name</th><th>Email</th><th>Signed</th></tr></thead>
+<tbody>{body}</tbody>
+</table>
+<p class="note">Content SHA-256 is the fingerprint of the page title and blocks. The digital signature on this PDF covers this certificate page as well.</p>
+<p class="note">This certificate is self-signed for the demo. It proves these PDF bytes have not changed. It is not issued by a public certificate authority.</p>
+</section>"""
+
+
+def render_page_pdf(
+    title: str,
+    chunks: list[dict[str, Any]],
+    completion: CompletionRecord | None = None,
+) -> bytes:
     from weasyprint import HTML
 
-    html = page_to_html(title, chunks)
+    html = page_to_html(title, chunks, completion)
     pdf = HTML(string=html).write_pdf()
     if not isinstance(pdf, (bytes, bytearray)):
         raise RuntimeError("WeasyPrint did not return PDF bytes")

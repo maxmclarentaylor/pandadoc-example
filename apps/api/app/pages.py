@@ -19,13 +19,14 @@ from app.db import SessionLocal, get_db
 from app.email_send import EmailConfigError, EmailSendError, send_signing_invite
 from app.models import Page, PageAssignee
 from app.page_integrity import content_hash
-from app.page_pdf import pdf_sha256, render_page_pdf
-from app.page_seal import SealError, seal_pdf
+from app.page_pdf import CompletionRecord, CompletionSigner, pdf_sha256, render_page_pdf
+from app.page_seal import SealError, inspect_seal, seal_pdf
 from app.schemas import (
     AssigneeOut,
     AssigneesWrite,
     PageIntegrityOut,
     PageOut,
+    SealCheckOut,
     PageSummary,
     PageWrite,
     SigningFieldsWrite,
@@ -306,6 +307,9 @@ def update_signing_fields(
             .order_by(PageAssignee.sort_order, PageAssignee.created_at)
         )
     )
+    allowed = [row.demo_entra_upn for row in assignees]
+    logging.getLogger("uvicorn.error").info("allowed %s", allowed)
+
     matched = next((row for row in assignees if row.demo_entra_upn == upn), None)
     if matched is None:
         raise HTTPException(
@@ -321,10 +325,24 @@ def update_signing_fields(
         matched.signed_at = datetime.now(timezone.utc)
 
     complete = _assignees_all_signed(assignees) and _signature_chunks_complete(list(page.chunks))
+    sealed_at = datetime.now(timezone.utc) if complete else None
     try:
-        pdf = render_page_pdf(page.title, list(page.chunks))
-        if complete:
+        if complete and sealed_at is not None:
+            pdf = render_page_pdf(
+                page.title,
+                list(page.chunks),
+                completion=CompletionRecord(
+                    content_hash=page.content_hash or "",
+                    sealed_at=sealed_at,
+                    signers=[
+                        CompletionSigner(name=row.name, email=row.email, signed_at=row.signed_at)
+                        for row in assignees
+                    ],
+                ),
+            )
             pdf = seal_pdf(pdf)
+        else:
+            pdf = render_page_pdf(page.title, list(page.chunks))
     except SealError as exc:
         log.exception("PDF seal failed for page %s", page_id)
         raise HTTPException(
@@ -340,7 +358,7 @@ def update_signing_fields(
     page.pdf_bytes = pdf
     page.pdf_hash = pdf_sha256(pdf)
     page.signing_complete = complete
-    page.sealed_at = datetime.now(timezone.utc) if complete else None
+    page.sealed_at = sealed_at
     page.updated_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(page)
@@ -415,6 +433,37 @@ def unlock_page(
     db.commit()
     db.refresh(page)
     return _to_out(page)
+
+
+@router.get("/{page_id}/seal", response_model=SealCheckOut)
+def verify_page_seal(
+    page_id: str,
+    _claims: dict[str, Any] = Depends(require_entra_user),
+    db: Session = Depends(get_db),
+) -> SealCheckOut:
+    """Check the signature embedded in the sealed PDF."""
+    page = _get_page(db, page_id)
+    if page.sealed_at is None or not page.pdf_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Page has not been sealed",
+        )
+    try:
+        inspection = inspect_seal(page.pdf_bytes)
+    except SealError as exc:
+        log.exception("PDF seal check failed for page %s", page_id)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Could not check the seal: {exc}",
+        ) from exc
+    return SealCheckOut(
+        id=page.id,
+        intact=inspection.intact,
+        field_name=inspection.field_name,
+        certificate_name=inspection.certificate_name,
+        self_signed=inspection.self_signed,
+        sealed_at=page.sealed_at,
+    )
 
 
 @router.get("/{page_id}/pdf")

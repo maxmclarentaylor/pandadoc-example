@@ -1,0 +1,57 @@
+.seal-panel {
+  display: grid;
+  gap: 0.45rem;
+  margin-top: 0.75rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.03);
+}
+
+.seal-panel-title,
+.seal-panel-result,
+.seal-panel-note,
+.seal-panel-status,
+.seal-panel-error {
+  margin: 0;
+}
+
+.seal-panel-title,
+.seal-panel-result {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.seal-panel-note,
+.seal-panel-status {
+  color: #3f3f46;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
+.seal-panel-error {
+  color: #9b2c2c;
+  font-size: 0.82rem;
+  font-weight: 600;
+}
+
+.seal-panel-download {
+  justify-self: start;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid #cfe3d6;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--accent-deep);
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.seal-panel-download:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}

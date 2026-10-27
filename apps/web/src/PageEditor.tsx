@@ -12,10 +12,13 @@ import {
   pageCollabUrl,
   saveAssignees,
   verifyPageIntegrity,
+  verifyPageSeal,
+  type SealCheck,
   type AssigneeWrite,
   type PageAssignee,
 } from './api'
 import AssigneesModal from './AssigneesModal'
+import SealPanel from './SealPanel'
 import ConfirmLockModal from './ConfirmLockModal'
 import { useAuth } from './AuthContext'
 import {
@@ -86,6 +89,10 @@ export default function PageEditor() {
   const [sendBusy, setSendBusy] = useState(false)
   const [pdfHash, setPdfHash] = useState<string | null>(null)
   const [pdfBusy, setPdfBusy] = useState(false)
+  const [sealed, setSealed] = useState(false)
+  const [sealCheck, setSealCheck] = useState<SealCheck | null>(null)
+  const [sealBusy, setSealBusy] = useState(false)
+  const [sealError, setSealError] = useState<string | null>(null)
   const [lockConfirmOpen, setLockConfirmOpen] = useState(false)
   const docRef = useRef<Y.Doc | null>(null)
   const remoteEdit = useRef(false)
@@ -103,6 +110,38 @@ export default function PageEditor() {
   }, [locked])
 
   useEffect(() => {
+    if (!pageId || !sealed) {
+      setSealCheck(null)
+      setSealError(null)
+      setSealBusy(false)
+      return
+    }
+
+    let cancel = false
+    setSealBusy(true)
+    setSealError(null)
+    verifyPageSeal(pageId, getAccessToken)
+      .then((result) => {
+        if (!cancel) {
+          setSealCheck(result)
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancel) {
+          setSealError(err instanceof Error ? err.message : 'Could not check the seal')
+        }
+      })
+      .finally(() => {
+        if (!cancel) {
+          setSealBusy(false)
+        }
+      })
+    return () => {
+      cancel = true
+    }
+  }, [pageId, sealed, getAccessToken])
+
+  useEffect(() => {
     if (!pageId) {
       setTitle(DEFAULT_TITLE)
       setChunks(STARTING_CHUNKS)
@@ -113,6 +152,9 @@ export default function PageEditor() {
       setAssigneesOpen(false)
       setAssigneesError(null)
       setEmailsSent(false)
+      setSealed(false)
+      setSealCheck(null)
+      setSealError(null)
       setLoadError(null)
       setReady(true)
       setLive(false)
@@ -132,6 +174,9 @@ export default function PageEditor() {
     setAssigneesError(null)
     setEmailsSent(false)
     setPdfHash(null)
+    setSealed(false)
+    setSealCheck(null)
+    setSealError(null)
     setLoadError(null)
 
     const id = pageId
@@ -176,6 +221,7 @@ export default function PageEditor() {
           setContentHash(saved.content_hash)
           setEmailsSent(saved.emails_sent)
           setPdfHash(saved.pdf_hash)
+          setSealed(saved.sealed)
           setIntegrity('idle')
         }
         try {
@@ -490,7 +536,7 @@ export default function PageEditor() {
           <div className="editor-main">
             <div className="page-heading">
               <button type="button" className="page-back" onClick={() => navigate('/')}>
-                Pages
+                Documents
               </button>
               <input
                 className="page-title"
@@ -595,6 +641,7 @@ export default function PageEditor() {
                     <code>{pdfHash}</code>
                   </p>
                 ) : null}
+                {sealed ? <SealPanel check={sealCheck} busy={sealBusy} error={sealError} /> : null}
                 <div className="page-lock-actions">
                   <button
                     type="button"

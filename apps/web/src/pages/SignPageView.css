@@ -1,7 +1,7 @@
 .sign-page {
-  min-height: 100vh;
-  padding: 1.5rem 1.25rem 3rem;
-  background: #eceff3;
+  min-height: calc(100vh - 56px);
+  padding: 1.75rem 1.25rem 3.5rem;
+  background: transparent;
 }
 
 .sign-page-header {
@@ -26,10 +26,10 @@
 
 .sign-page-back {
   padding: 0.45rem 0.7rem;
-  border: 1px solid #e6e8ec;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: #fff;
-  color: #3f3f46;
+  background: var(--panel);
+  color: var(--muted);
   font: inherit;
   cursor: pointer;
 }
@@ -52,14 +52,66 @@
   color: #9b2c2c;
 }
 
-.sign-page-sealed {
+.sign-page .seal-panel {
   width: min(816px, 100%);
   margin: 0 auto 1rem;
-  padding: 0.75rem 0.9rem;
-  border: 1px solid #bbf7d0;
-  border-radius: 8px;
-  background: #f0fdf4;
-  color: #166534;
-  font-size: 0.9rem;
+}
+
+.sign-page-signers {
+  width: min(816px, 100%);
+  margin: 0 auto 1rem;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.03);
+}
+
+.sign-page-signers h2 {
+  margin: 0 0 0.65rem;
+  color: #3f3f46;
+  font-size: 0.8rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.sign-page-signers ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.sign-page-signers li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.sign-page-signer-name {
+  min-width: 0;
+  color: var(--ink);
   font-weight: 600;
+}
+
+.sign-page-signer-done,
+.sign-page-signer-waiting {
+  flex: none;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.sign-page-signer-done {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.sign-page-signer-waiting {
+  background: #f4f4f5;
+  color: #52525b;
 }
