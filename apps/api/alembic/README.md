@@ -2,8 +2,9 @@
 
 Schema changes live here as versioned scripts.
 
-**Production/dev Azure:** migrations run from GitHub Actions after merge to
-`main` (see `.github/workflows/deploy-api.yml`) — not on API startup.
+**Production/dev Azure:** Deploy API sets the App Service startup command so
+`alembic upgrade head` runs in the app container (`$APP_PATH/antenv`) before
+uvicorn starts.
 
 ```bash
 # Local / laptop against allow-listed Postgres
