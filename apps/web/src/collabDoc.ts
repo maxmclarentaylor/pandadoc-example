@@ -4,11 +4,12 @@ import type { Chunk, ChunkType } from './chunks/types'
 /** Marks edits that started in this browser, so we do not apply them twice. */
 export const LOCAL = 'local'
 
-export function readPage(doc: Y.Doc): { title: string; chunks: Chunk[] } {
+export function readPage(doc: Y.Doc): { title: string; chunks: Chunk[]; locked: boolean } {
   const chunks = doc.getArray<Y.Map<unknown>>('chunks')
   return {
     title: doc.getText('title').toString(),
     chunks: chunks.toArray().map(readChunk),
+    locked: Boolean(doc.getMap('meta').get('locked')),
   }
 }
 
@@ -16,6 +17,15 @@ export function writePage(doc: Y.Doc, title: string, chunks: Chunk[]) {
   doc.transact(() => {
     applyString(doc.getText('title'), title)
     syncChunks(doc.getArray<Y.Map<unknown>>('chunks'), chunks)
+  }, LOCAL)
+}
+
+export function writeLocked(doc: Y.Doc, locked: boolean) {
+  doc.transact(() => {
+    const meta = doc.getMap('meta')
+    if (meta.get('locked') !== locked) {
+      meta.set('locked', locked)
+    }
   }, LOCAL)
 }
 

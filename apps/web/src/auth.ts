@@ -28,17 +28,29 @@ export const msal = new PublicClientApplication({
   },
 })
 
-let ready: Promise<void> | null = null
+let ready: Promise<AuthenticationResult | null> | null = null
 
-export function initMsal(): Promise<void> {
+/**
+ * Initialize MSAL and finish any redirect that just returned to this tab.
+ * Returns the redirect result when the user just signed in, otherwise null.
+ */
+export function initMsal(): Promise<AuthenticationResult | null> {
   if (!ready) {
-    ready = msal.initialize().then(() => {
+    ready = (async () => {
+      await msal.initialize()
+      const redirectResult = await msal.handleRedirectPromise()
+      if (redirectResult?.account) {
+        msal.setActiveAccount(redirectResult.account)
+        return redirectResult
+      }
+
       const account = msal.getActiveAccount() ?? msal.getAllAccounts()[0] ?? null
       // Do not call ssoSilent here — that would skip the Entra UI using the browser cookie.
       if (account) {
         msal.setActiveAccount(account)
       }
-    })
+      return null
+    })()
   }
   return ready
 }
@@ -51,28 +63,25 @@ export function isInteractionRequired(err: unknown): boolean {
   return err instanceof InteractionRequiredAuthError
 }
 
-export async function login(): Promise<AuthenticationResult> {
+/** Sends this tab to Entra. The auth result comes back through handleRedirectPromise. */
+export async function login(): Promise<void> {
   await initMsal()
   // Always show Entra UI (don't silently reuse the Microsoft browser SSO session).
-  const result = await msal.loginPopup({
+  await msal.loginRedirect({
     scopes,
     prompt: 'select_account',
   })
-  msal.setActiveAccount(result.account)
-  return result
 }
 
+/** Sends this tab to Entra logout, then back to the app origin. */
 export async function logout(): Promise<void> {
   await initMsal()
   const account = getAccount()
-  await msal.logoutPopup({
+  await msal.logoutRedirect({
     account: account ?? undefined,
     // End the Microsoft session for this account so the next sign-in is not silent SSO.
     postLogoutRedirectUri: window.location.origin,
   })
-  msal.setActiveAccount(null)
-  // Drop any leftover MSAL cache entries for this SPA.
-  await msal.clearCache()
 }
 
 /**

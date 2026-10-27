@@ -1,11 +1,10 @@
-import { Lock, MessageSquarePlus, Palette, Shapes, type LucideIcon } from 'lucide-react'
+import { MessageSquarePlus, Palette, Shapes, type LucideIcon } from 'lucide-react'
 import type { Chunk } from '../chunks/types'
 
 export const BLOCK_ACTIONS: { label: string; icon: LucideIcon }[] = [
   { label: 'Add to content library', icon: Shapes },
   { label: 'Add a comment', icon: MessageSquarePlus },
   { label: 'Text block design', icon: Palette },
-  { label: 'Content locking', icon: Lock },
 ]
 
 export const STARTING_CHUNKS: Chunk[] = [

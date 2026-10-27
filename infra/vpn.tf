@@ -1,6 +1,6 @@
 # Stage 5 — Point-to-Site VPN into the VNet
 # Lets your laptop reach Private Endpoints (Postgres / Key Vault) over a private tunnel.
-# Opt-in: -var="enable_vpn_gateway=true" (VpnGw1 ≈ £25–35/mo; create can take 30–45 min).
+# Opt-in: -var="enable_vpn_gateway=true" (VpnGw1AZ ≈ £25–40/mo; create can take 30–45 min).
 # After VPN works, set postgres_public_network_access=false to close the public DB path.
 
 resource "azurerm_subnet" "gateway" {
@@ -93,9 +93,10 @@ resource "azurerm_virtual_network_gateway" "vpn" {
   resource_group_name = azurerm_resource_group.dev.name
   type                = "Vpn"
   vpn_type            = "RouteBased"
-  sku                 = "VpnGw1"
+  # Azure no longer allows non-AZ SKUs (VpnGw1); use VpnGw1AZ for new gateways.
+  sku                 = "VpnGw1AZ"
   active_active       = false
-  enable_bgp          = false
+  bgp_enabled         = false
   tags                = local.common_tags
 
   ip_configuration {

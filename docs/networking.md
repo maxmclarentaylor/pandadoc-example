@@ -35,14 +35,14 @@ App Service (via VNet)
 ### Stage 5 (VPN → then close public Postgres)
 | Piece | Why |
 |-------|-----|
-| VPN Gateway (VpnGw1) + Point-to-Site | Laptop joins the VNet over a tunnel |
+| VPN Gateway (VpnGw1AZ) + Point-to-Site | Laptop joins the VNet over a tunnel |
 | Cert-based auth (root + client cert) | No shared password; install client cert on your Mac |
 | `postgres_public_network_access=false` | After VPN works — DB has **no** public endpoint |
 
 ## Cost (ballpark)
 - B1 App Service: ~£35–45/month
 - Private Endpoint: ~£5–8/month **each** (×2)
-- **VPN Gateway VpnGw1: ~£25–35/month** (only if `enable_vpn_gateway=true`)
+- **VPN Gateway VpnGw1AZ: ~£25–40/month** (only if `enable_vpn_gateway=true`)
 - Tear down VPN / PEs / drop to F1 when you want to save money
 
 ## Apply Key Vault PE (Stage 4b) if not already live

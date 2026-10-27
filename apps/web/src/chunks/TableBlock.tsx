@@ -3,9 +3,10 @@ import type { ChunkChange, TableChunk } from './types'
 type TableBlockProps = {
   chunk: TableChunk
   onChange: ChunkChange
+  readOnly?: boolean
 }
 
-export default function TableBlock({ chunk, onChange }: TableBlockProps) {
+export default function TableBlock({ chunk, onChange, readOnly = false }: TableBlockProps) {
   function updateColumn(index: number, value: string) {
     const columns = chunk.columns.map((column, columnIndex) => (columnIndex === index ? value : column))
     onChange({ ...chunk, columns })
@@ -29,6 +30,7 @@ export default function TableBlock({ chunk, onChange }: TableBlockProps) {
               <input
                 value={column}
                 aria-label={`Column ${index + 1}`}
+                readOnly={readOnly}
                 onChange={(event) => updateColumn(index, event.target.value)}
               />
             </th>
@@ -43,6 +45,7 @@ export default function TableBlock({ chunk, onChange }: TableBlockProps) {
                 <input
                   value={cell}
                   aria-label={`Row ${rowIndex + 1}, column ${columnIndex + 1}`}
+                  readOnly={readOnly}
                   onChange={(event) => updateCell(rowIndex, columnIndex, event.target.value)}
                 />
               </td>

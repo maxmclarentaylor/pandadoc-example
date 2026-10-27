@@ -1,6 +1,8 @@
-# Web (v0)
+# Web
 
-React event console. **Entra ID login** unlocks the app (`useAuth` + `/v1/me`).
+The signing demo. The click-by-click steps are in the root [README](../../README.md).
+
+**Entra ID login** unlocks the app (`useAuth` + `/v1/me`).
 
 ## Run
 ```bash

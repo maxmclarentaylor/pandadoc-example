@@ -18,9 +18,12 @@ override.tf.json
 
 # Python
 .venv/
+# Demo PDF seal key, generated on first completed signing
+apps/api/var/
 __pycache__/
 *.py[cod]
 .env
+.env.docker
 .pytest_cache/
 .mypy_cache/
 

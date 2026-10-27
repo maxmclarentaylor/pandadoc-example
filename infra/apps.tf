@@ -35,7 +35,9 @@ resource "azurerm_linux_web_app" "api" {
       python_version = "3.12"
     }
 
-    app_command_line = "python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    # Alembic has to run here. The built virtualenv is at $APP_PATH/antenv,
+    # which exists only after the app container starts, not in the Kudu command API.
+    app_command_line = "cd \"$APP_PATH\" && \"$APP_PATH/antenv/bin/python\" -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
     cors {
       allowed_origins = compact([
         "http://localhost:5173",

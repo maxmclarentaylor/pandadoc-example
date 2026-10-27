@@ -39,10 +39,8 @@ def _jwks_client(jwks_uri: str) -> PyJWKClient:
     return PyJWKClient(jwks_uri, cache_keys=True)
 
 
-def require_entra_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
-) -> dict[str, Any]:
-    """Decode + verify a Bearer access token from Entra ID."""
+def decode_entra_token(token: str) -> dict[str, Any]:
+    """Decode and verify one Entra access token. Raises HTTPException when it is not valid."""
     cfg = _settings()
     if not cfg["tenant_id"] or not cfg["audiences"]:
         raise HTTPException(
@@ -50,17 +48,10 @@ def require_entra_user(
             detail="Auth not configured (set AZURE_TENANT_ID and AZURE_API_CLIENT_ID)",
         )
 
-    if credentials is None or credentials.scheme.lower() != "bearer":
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Missing bearer token",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
     try:
-        key = _jwks_client(cfg["jwks_uri"]).get_signing_key_from_jwt(credentials.credentials)
-        claims = jwt.decode(
-            credentials.credentials,
+        key = _jwks_client(cfg["jwks_uri"]).get_signing_key_from_jwt(token)
+        return jwt.decode(
+            token,
             key.key,
             algorithms=["RS256"],
             audience=cfg["audiences"],
@@ -74,4 +65,15 @@ def require_entra_user(
             headers={"WWW-Authenticate": "Bearer"},
         ) from exc
 
-    return claims
+
+def require_entra_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> dict[str, Any]:
+    """Decode + verify a Bearer access token from Entra ID."""
+    if credentials is None or credentials.scheme.lower() != "bearer":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return decode_entra_token(credentials.credentials)

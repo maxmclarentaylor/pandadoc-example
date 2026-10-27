@@ -47,9 +47,16 @@ resource "azurerm_key_vault" "dev" {
   }
 }
 
-# So you can manage secrets in the portal / CLI after apply
+# Fixed identities. Using the logged-in caller made this role flip between
+# a laptop apply and a GitHub Actions plan.
 resource "azurerm_role_assignment" "current_user_kv_admin" {
   scope                = azurerm_key_vault.dev.id
   role_definition_name = "Key Vault Administrator"
-  principal_id         = data.azurerm_client_config.current.object_id
+  principal_id         = var.operator_object_id
+}
+
+resource "azurerm_role_assignment" "github_actions_kv_secrets" {
+  scope                = azurerm_key_vault.dev.id
+  role_definition_name = "Key Vault Secrets Officer"
+  principal_id         = var.github_actions_object_id
 }

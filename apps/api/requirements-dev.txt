@@ -1,0 +1,6 @@
+# Dev / test tools (not installed into the production App Service image).
+-r requirements.txt
+pytest==8.4.2
+pytest-asyncio==1.1.0
+pytest-cov==6.2.1
+respx==0.22.0

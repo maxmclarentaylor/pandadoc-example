@@ -1,8 +1,9 @@
 name: Deploy API
 
 on:
+  # Runs after a push to dev (and on manual dispatch).
   push:
-    branches: [main]
+    branches: [dev]
     paths:
       - "apps/api/**"
       - ".github/workflows/deploy-api.yml"
@@ -33,3 +34,18 @@ jobs:
         with:
           app-name: ${{ vars.AZURE_API_WEBAPP_NAME }}
           package: apps/api
+
+      # The Kudu command API cannot see $APP_PATH. Migrations run when the app
+      # container starts, where the virtualenv is $APP_PATH/antenv.
+      - name: Run Alembic migrations on startup
+        env:
+          APP_NAME: ${{ vars.AZURE_API_WEBAPP_NAME }}
+          RESOURCE_GROUP: segment-practice-dev-rg
+        working-directory: .
+        run: |
+          set -euo pipefail
+          az webapp config set \
+            -g "$RESOURCE_GROUP" \
+            -n "$APP_NAME" \
+            --startup-file 'cd "$APP_PATH" && "$APP_PATH/antenv/bin/python" -m alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port 8000'
+          az webapp restart -g "$RESOURCE_GROUP" -n "$APP_NAME"

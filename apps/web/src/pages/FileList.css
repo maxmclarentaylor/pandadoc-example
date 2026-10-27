@@ -1,7 +1,7 @@
 .file-list {
-  width: min(640px, 100%);
+  width: min(720px, 100%);
   margin: 0 auto;
-  padding: 3rem 1.5rem 4rem;
+  padding: 2.25rem 1.5rem 4.5rem;
 }
 
 .file-list-header {
@@ -9,40 +9,103 @@
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-bottom: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.file-list-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 1.35rem;
+  padding: 0.2rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: rgba(255, 252, 248, 0.7);
+}
+
+.file-list-tab {
+  padding: 0.42rem 0.85rem;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.file-list-tab-active {
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.06);
 }
 
 .file-list-header h1 {
   margin: 0;
-  color: #1c1c1c;
-  font-size: 1.6rem;
-  font-weight: 650;
+  color: var(--ink);
+  font-family: "Fraunces", Georgia, serif;
+  font-size: 2rem;
+  font-weight: 550;
+  letter-spacing: -0.03em;
+}
+
+.file-list-heading {
+  display: grid;
+  gap: 0.45rem;
+}
+
+.file-list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
 }
 
 .file-list-create,
+.file-list-secondary,
+.file-list-nav,
 .file-list-item {
   font: inherit;
   cursor: pointer;
 }
 
-.file-list-create {
+.file-list-nav,
+.file-list-secondary {
   padding: 0.55rem 0.9rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.file-list-nav {
+  width: fit-content;
+  padding: 0.35rem 0.65rem;
+  font-size: 0.85rem;
+}
+
+.file-list-create {
+  padding: 0.55rem 0.95rem;
   border: 0;
   border-radius: 8px;
-  background: #1f7a4d;
+  background: var(--accent);
   color: #fff;
   font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 .file-list-create:hover,
 .file-list-create:active {
-  background: #18663f;
+  background: var(--accent-deep);
 }
 
 .file-list-status,
 .file-list-error {
   margin: 0;
-  color: #71717a;
+  color: var(--muted);
 }
 
 .file-list-error {
@@ -57,19 +120,122 @@
   gap: 0.55rem;
 }
 
+.file-list-row {
+  display: flex;
+  align-items: stretch;
+  gap: 0.45rem;
+}
+
 .file-list-item {
-  display: block;
-  width: 100%;
-  padding: 0.9rem 1rem;
-  border: 1px solid #e6e8ec;
-  border-radius: 8px;
-  background: #fff;
-  color: #1c1c1c;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  flex: 1;
+  min-width: 0;
+  padding: 0.95rem 1.05rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--ink);
   text-align: left;
   font-weight: 600;
+  box-shadow: 0 1px 2px rgba(28, 25, 21, 0.03);
+}
+
+.file-list-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-list-locked,
+.file-list-signed {
+  flex: none;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.file-list-locked {
+  background: #f3efe8;
+  color: #5c564e;
+}
+
+.file-list-signed {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
 }
 
 .file-list-item:hover,
 .file-list-item:active {
-  background: #f8fafc;
+  border-color: #d4cdc2;
+  background: #fff;
+}
+
+.file-list-item-static,
+.file-list-item-static:hover,
+.file-list-item-static:active {
+  cursor: default;
+  border-color: var(--line);
+  background: var(--panel);
+}
+
+.file-list-download-wrap {
+  display: inline-flex;
+  flex: none;
+}
+
+.file-list-download-wrap:has(.file-list-download:disabled) {
+  cursor: not-allowed;
+}
+
+.file-list-download {
+  flex: none;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid #cfe3d6;
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--accent-deep);
+  font: inherit;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.file-list-download:hover:not(:disabled),
+.file-list-download:active:not(:disabled) {
+  background: var(--accent-soft);
+}
+
+.file-list-download:disabled {
+  opacity: 0.5;
+  color: #71717a;
+  pointer-events: none;
+}
+
+.file-list-delete {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 2.75rem;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.file-list-delete:hover:not(:disabled),
+.file-list-delete:active:not(:disabled) {
+  background: #fef2f2;
+}
+
+.file-list-delete:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
